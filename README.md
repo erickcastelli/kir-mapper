@@ -29,7 +29,7 @@ System compatibility: MacOS, Linux, or WSL2/Linux. We have tested it with MacOS 
 
 Read depth: Please note that read depth is essential. We recommend coverage of at least 30x for WGS and 50x for WES. 
 
-Read size: You will get better results when dealing with a read size larger than 75 nucleotides and paired-end sequencing, although kir-mapper is also compatible with single-end sequencing data.
+Read size: You will get better results when dealing with a read size larger than 75 nucleotides and paired-end sequencing data, although Kir-mapper is also compatible with single-end sequencing data.
 
 Sample size: The minimum sample size we tested is 50 samples. Sample size is important to get accurate estimations for copy numbers. 
 
@@ -72,12 +72,12 @@ Kir-mapper depends on a list of libraries and third-part programs, including sam
 
 7. Use conda to create an environment for kir-mapper using the kir-mapper.yml from the repository
 ```
-	conda env create -f kir-mapper.yml
+	conda env create -f src/kir-mapper.yml
 ```
 
 8. Use conda to create an environment to compile kir-mapper using the kir-mapper_compile.yml from the repository.
 ```
-	conda env create -f kir-mapper_compile.yml
+	conda env create -f src/kir-mapper_compile.yml
 ```
 
 9. From the kir-mapper directory (you are already there), create a new folder named `build` and enter it.
@@ -92,7 +92,7 @@ Kir-mapper depends on a list of libraries and third-part programs, including sam
 
 11. Compile kir-mapper
 ```
-	cmake ..
+	cmake ../src
 	make
 ```
 
@@ -133,7 +133,7 @@ Kir-mapper depends on a list of libraries and third-part programs, including sam
 
 ### Option 2 (installing everything yourself)
 
-Kir-mapper depends on a list of libraries and third-part programs, as follows:
+Kir-mapper depends on a list of libraries and third-party programs, as follows:
 
 - boost 1.70 or 1.74
 - cmake >= 3.26.4
@@ -153,7 +153,7 @@ Kir-mapper depends on a list of libraries and third-part programs, as follows:
 - bgzip and tabix
 
 
-To compile the program by your self, assuming that everything above is available, follow these steps:
+To compile the program by yourself, assuming that everything above is available, follow these steps:
 
 1. Clone the [Kir-mapper gitHub repo](https://github.com/erickcastelli/kir-mapper), e.g. with `git clone https://github.com/erickcastelli/kir-mapper.git`
 
@@ -169,7 +169,7 @@ To compile the program by your self, assuming that everything above is available
 
 4. Compile the program
 ```
-	cmake ..
+	cmake ../src/
 	make
 ```
 
