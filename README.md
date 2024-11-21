@@ -142,7 +142,6 @@ make
 
 First, delete the build folder and create a new one
 ```
-#delete the build folder and create a new one
 cd ..
 rm -rf build
 mkdir build && cd build
@@ -160,7 +159,6 @@ make
 
 First, delete the build folder and create a new one
 ```
-#delete the build folder and create a new one
 cd ..
 rm -rf build
 mkdir build && cd build
