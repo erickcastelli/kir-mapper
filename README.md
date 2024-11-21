@@ -139,12 +139,45 @@ make
 ```
 
 11. If step 10 doesn't work, try this (assuming that your conda kir-mapper environment is on /home/USER/miniconda/envs/kir-mapper). **Replace USER by your username.**
+
+First, delete the build folder and create a new one
+```
+#delete the build folder and create a new one
+cd ..
+rm -rf build
+mkdir build && cd build
+```
+
+Now, compile kir-mapper with this option, replacing **USER** by your username
+
 ```
 BOOST_ROOT=/home/USER/miniconda3/envs/kir-mapper ZLIB_ROOT=/home/USER/miniconda3/envs/kir-mapper cmake ../src/
 make
 ```
 
-12. Copy the kir-mapper binary to the /usr/bin, or /usr/local/bin, or folder /bin from your kir-mapper environment (e.g.: /home/USER/miniconda3/envs/kir-mapper/bin). Alternativelly, you can run `kir-mapper` from the build folder. **Replace USER by your username.**
+
+12. If step 10 and 11 don't work, try this. **Replace USER by your username.**
+
+First, delete the build folder and create a new one
+```
+#delete the build folder and create a new one
+cd ..
+rm -rf build
+mkdir build && cd build
+```
+
+Now, compile kir-mapper with this option, replacing **USER** by your username
+
+```
+cmake -DBoost_INCLUDE_DIR=/home/USER/miniconda3/envs/kir-mapper/include \
+      -DBoost_LIBRARY_DIR=/home/USER/miniconda3/envs/kir-mapper/lib \
+      -DZLIB_ROOT=/home/USER/miniconda3/envs/kir-mapper \
+      ../src
+make
+```
+
+
+13. Copy the kir-mapper binary to the /usr/bin, or /usr/local/bin, or folder /bin from your kir-mapper environment (e.g.: /home/USER/miniconda3/envs/kir-mapper/bin). Alternativelly, you can run `kir-mapper` from the build folder. **Replace USER by your username.**
 ```
 cp kir-mapper /home/USER/miniconda3/envs/kir-mapper/bin/
 ```
@@ -154,14 +187,14 @@ cp kir-mapper /usr/local/bin
 ```
 
 
-13. Run kir-mapper. The setup process usually starts automatically. If it doesn't, you can call it by typing the following:
+14. Run kir-mapper. The setup process usually starts automatically. If it doesn't, you can call it by typing the following:
 ```
 kir-mapper setup
 ```
 
-14. Follow the setup steps. kir-mapper will automatically detect most programs (BWA, samtools, bcftools, freebayes, etc). The only exception is the path for the database (from step 5) and for PICARD tools (from step 6). 
+15. Follow the setup steps. kir-mapper will automatically detect most programs (BWA, samtools, bcftools, freebayes, etc). The only exception is the path for the database (from step 5) and for PICARD tools (from step 6). 
 
-15. You are all set. Don't forget to activate the kir-mapper environment before using it.
+16. You are all set. Don't forget to activate the kir-mapper environment before using it.
 ```
 conda activate kir-mapper
 ```
