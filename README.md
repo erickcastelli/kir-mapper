@@ -122,23 +122,33 @@ wget --no-check-certificate https://github.com/broadinstitute/picard/releases/do
 conda env create -f kir-mapper.yml
 ```
 
-8. Now, activate the kir-mapper environment.
+8. Use conda to create an environment for shapeit4 using the shapeit4.yml from the repository
+```
+conda env create -f shapeit4.yml
+```
+
+9. Copy the shapeit4 binary to the kir-mapper conda environment. Replace **USER** by your username.
+```
+cp /home/USER/miniconda3/envs/shapeit4/bin/shapeit4 /home/USER/miniconda3/envs/kir-mapper/bin
+```
+
+10. Now, activate the kir-mapper environment.
 ```
 conda activate kir-mapper
 ```
 
-9. From the kir-mapper directory (you are already there), create a new folder named `build` and enter it.
+11. From the kir-mapper directory (you are already there), create a new folder named `build` and enter it.
 ```
 mkdir build && cd build
 ```
 
-10. Compile kir-mapper from the /build folder. If this doesn't work, try step 11.
+12. Compile kir-mapper from the /build folder. If this doesn't work, try step 11.
 ```
 cmake ../src/
 make
 ```
 
-11. If step 10 doesn't work, try this (assuming that your conda kir-mapper environment is on /home/USER/miniconda/envs/kir-mapper). **Replace USER by your username.**
+13. If step 12 doesn't work, try this. **Replace USER by your username.**
 
 First, delete the build folder and create a new one
 ```
@@ -155,7 +165,7 @@ make
 ```
 
 
-12. If step 10 and 11 don't work, try this. **Replace USER by your username.**
+14. If step 12 and 13 failed, try this. **Replace USER by your username.**
 
 First, delete the build folder and create a new one
 ```
@@ -175,7 +185,7 @@ make
 ```
 
 
-13. Copy the kir-mapper binary to the /usr/bin, or /usr/local/bin, or folder /bin from your kir-mapper environment (e.g.: /home/USER/miniconda3/envs/kir-mapper/bin). Alternativelly, you can run `kir-mapper` from the build folder. **Replace USER by your username.**
+15. Copy the kir-mapper binary to the /usr/bin, or /usr/local/bin, or folder /bin from your kir-mapper environment (e.g.: /home/USER/miniconda3/envs/kir-mapper/bin). Alternativelly, you can run `kir-mapper` from the build folder. **Replace USER by your username.**
 ```
 cp kir-mapper /home/USER/miniconda3/envs/kir-mapper/bin/
 ```
@@ -185,14 +195,14 @@ cp kir-mapper /usr/local/bin
 ```
 
 
-14. Run kir-mapper. The setup process usually starts automatically. If it doesn't, you can call it by typing the following:
+16. Run kir-mapper. The setup process usually starts automatically. If it doesn't, you can call it by typing the following:
 ```
 kir-mapper setup
 ```
 
-15. Follow the setup steps. kir-mapper will automatically detect most programs (BWA, samtools, bcftools, freebayes, etc). The only exception is the path for the database (from step 5) and for PICARD tools (from step 6). 
+17. Follow the setup steps. kir-mapper will automatically detect most programs (BWA, samtools, bcftools, freebayes, etc). The only exception is the path for the database (from step 5) and for PICARD tools (from step 6). 
 
-16. You are all set. Don't forget to activate the kir-mapper environment before using it.
+18. You are all set. Don't forget to activate the kir-mapper environment before using it.
 ```
 conda activate kir-mapper
 ```

@@ -1,0 +1,12 @@
+name: shapeit4
+
+channels:
+  - statiskit 
+  - conda-forge
+  - bioconda
+  - defaults
+
+dependencies:
+  - shapeit4=4.2.2
+  - boost=1.74.0=py310h7c3ba0c_5
+  - boost-cpp=1.74.0=h75c5d50_8
