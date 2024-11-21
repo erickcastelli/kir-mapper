@@ -1457,7 +1457,7 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
 
                     string vcfout = out + "/" + gene + "." + region_out + ".vcf";
                     mtxadj.lock(); files_to_remove.push_back(vcfout); mtxadj.unlock();
-                    string hg38ref = db + "/reference/hg38/hg38DH.fa";
+                    string hg38ref = db + "/reference/hg38/reference.fasta";
 
                     string cmd = v_freebayes + " -A " + cnref + " -f " + hg38ref + " -b " + bam + " -r " + region;
                     for (auto item : bamlist) {cmd.append(" -b " + item);}
