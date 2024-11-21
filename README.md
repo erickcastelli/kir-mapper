@@ -91,84 +91,84 @@ To install kir-mapper and all its dependencies, use Conda and the kir-mapper.yml
 
 2. Make sure you added the proper channels:
 ```
-	conda config --add channels defaults
-	conda config --add channels bioconda
-	conda config --add channels conda-forge
-	conda config --set channel_priority true
+conda config --add channels defaults
+conda config --add channels bioconda
+conda config --add channels conda-forge
+conda config --set channel_priority true
 ```
 
 3. Clone the [kir-mapper GitHub repo](https://github.com/erickcastelli/kir-mapper)
 ```
-	git clone https://github.com/erickcastelli/kir-mapper
+git clone https://github.com/erickcastelli/kir-mapper
 ```
 
 4. Enter the kir-mapper repository.
 ```
-	cd kir-mapper
+cd kir-mapper
 ```
 
 5. Now, download the last version of the kir-mapper database:
 ```
-	wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
+wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
 ```
 
 6. Unzip the database.
 ```
-	unzip kir-mapper_db_latest.zip
+unzip kir-mapper_db_latest.zip
 ```
 
 7. Download PICARD tools.
 ```
-	wget --no-check-certificate https://github.com/broadinstitute/picard/releases/download/3.1.1/picard.jar
+wget --no-check-certificate https://github.com/broadinstitute/picard/releases/download/3.1.1/picard.jar
 ```
 
 8. Use conda to create an environment for kir-mapper using the kir-mapper.yml from the repository
 ```
-	conda env create -f kir-mapper.yml
+conda env create -f kir-mapper.yml
 ```
 
 9. Now, activate the kir-mapper environment.
 ```
-	conda activate kir-mapper
+conda activate kir-mapper
 ```
 
 10. From the kir-mapper directory (you are already there), create a new folder named `build` and enter it.
 ```
-	mkdir build && cd build
+mkdir build && cd build
 ```
 
 11. Compile kir-mapper from the /build folder
 ```
-	cmake ../src/
-	make
+cmake ../src/
+make
 ```
 
-12. If step 13 doesn't work, try this (assuming that your conda kir-mapper environment is on /home/USER/miniconda/envs/kir-mapper).
+12. If step 11 doesn't work, try this (assuming that your conda kir-mapper environment is on /home/USER/miniconda/envs/kir-mapper). Replace USER para your username.
 ```
-	BOOST_ROOT=/home/USER/miniconda3/envs/kir-mapper ZLIB_ROOT=/home/USER/miniconda3/envs/kir-mapper cmake ../src/
-	make
+BOOST_ROOT=/home/USER/miniconda3/envs/kir-mapper ZLIB_ROOT=/home/USER/miniconda3/envs/kir-mapper cmake ../src/
+make
 ```
 
 13. Copy the kir-mapper binary to the /usr/bin, or /usr/local/bin, or folder /bin from your kir-mapper environment (e.g.: /home/USER/miniconda3/envs/kir-mapper/bin). Alternativelly, you can run `kir-mapper` from the build folder. 
 ```
-	cp kir-mapper /home/USER/miniconda3/envs/kir-mapper/bin/
-	or
-	cp kir-mapper /usr/local/bin
+cp kir-mapper /home/USER/miniconda3/envs/kir-mapper/bin/
+```
+or
+```
+cp kir-mapper /usr/local/bin
 ```
 
 
 14. Run kir-mapper. The setup process usually starts automatically. If it doesn't, you can call it by typing the following:
 ```
-	kir-mapper
-	or
-	kir-mapper setup
+kir-mapper setup
 ```
 
 15. Follow the setup steps. kir-mapper will automatically detect most programs (BWA, samtools, bcftools, freebayes, etc). The only exception is the path for the database (from step 5 and 6) and for PICARD tools (from step 7). 
 
 16. You are all set. Don't forget to activate the kir-mapper environment before using it.
 ```
-	conda activate kir-mapper
+conda activate kir-mapper
 ```
 
 [Back to Summary](#summary)
@@ -204,39 +204,39 @@ To compile the program by your self, assuming that everything above is available
 
 1. Clone the [kir-mapper GitHub repo](https://github.com/erickcastelli/kir-mapper)
 ```
-	git clone https://github.com/erickcastelli/kir-mapper
+git clone https://github.com/erickcastelli/kir-mapper
 ```
 
 2. Enter the kir-mapper repository
 ```
-	cd kir-mapper
+cd kir-mapper
 ```
 
 3. Create a new folder named `build` and enter it
 ```
-	mkdir build && cd build
+mkdir build && cd build
 ```
 
 4. Compile the program
 ```
-	cmake ../src/
-	make
+cmake ../src/
+make
 ```
 
 5. Now, download the last version of the kir-mapper database:
 ```
-	wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
+wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
 ```
 
 
 6. Unzip the database.
 ```
-	unzip kir-mapper_db_latest.zip
+unzip kir-mapper_db_latest.zip
 ```
 
 7. Run kir-mapper. The setup process usually starts automatically. If it doesn't, you can call it by typing the following:
 ```
-	kir-mapper setup
+kir-mapper setup
 ```
 
 8. Follow the setup steps. kir-mapper will automatically detect most programs if they are available in the system. The only exception is the path for the database (from steps 5 and 6) and for PICARD tools. You can also indicate the path for each binary.
@@ -248,21 +248,19 @@ To compile the program by your self, assuming that everything above is available
 
 ## Kir-mapper configuration
 
-**If you installed kir-mapper using the Docker and the Dockerfile provided, kir-mapper is already configured. You can ignore this step.**
-
 If you followed any installation mode described above, kir-mapper is already configured. If it is not, you can configure it by typing `kir-mapper setup`
 
 Remember, you need a copy of the kir-mapper database to run any analysis. 
 
 ```
-	wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
-	unzip kir-mapper_db_latest.zip
+wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
+unzip kir-mapper_db_latest.zip
 ```
 
 kir-mapper uses a hidden configuration file (.txt) in your home folder containing the path for all necessary programs. If the program does not find this file, it enters the setup mode automatically. You can also call this mode by typing `kir-mapper setup` 
 
 ```
-	kir-mapper setup
+kir-mapper setup
 ```
 
 Follow the instructions provided to indicate the path of all necessary programs. kir-mapper might find the programs automatically. The only exception is the database and the PICARD jar file. 
@@ -318,18 +316,30 @@ Typing `kir-mapper map`, for instance, will display all the options for the `map
 
 Example for a sample tagged as "Test". "Test" will be the name for the sample in all outputs.
 ```	
-	# Re-aligning a BAM file
-	kir-mapper map -bam original_BAM.bam -sample test -output /home/USER/output 
-	# Aligning FASTQ 
-	kir-mapper map -r1 R1.fastq.gz -r2 R2.fastq.gz -sample test -output /home/USER/output 
-	# Aligning FASTQ from exomes 
-	kir-mapper map -r1 R1.fastq.gz -r2 R2.fastq.gz -sample test -output /home/USER/output --exome 
+# Re-aligning a BAM file
+kir-mapper map -bam original_BAM.bam -sample test -output /home/USER/output 
 
+# Aligning FASTQ 
+kir-mapper map -r1 R1.fastq.gz -r2 R2.fastq.gz -sample test -output /home/USER/output 
+
+# Aligning FASTQ from exomes 
+kir-mapper map -r1 R1.fastq.gz -r2 R2.fastq.gz -sample test -output /home/USER/output --exome 
 ```
 
-When evaluating many samples simultaneously, run `map` for every sample, indicating the same output but different sample names.
+Examples using the sample data provided in /samples
+```	
+kir-mapper map -r1 HG00096.R1.fastq.gz -r2 HG00096.R2.fastq.gz -sample HG00096 -output /home/USER/output 
+kir-mapper map -r1 HG02461.R1.fastq.gz -r2 HG02461.R2.fastq.gz -sample HG02461 -output /home/USER/output 
+kir-mapper map -bam HG00403.KIR.bam -sample HG00403 -output /home/USER/output 
+kir-mapper map -bam HG01583.KIR.bam -sample HG01583 -output /home/USER/output 
+```
+
+When evaluating many samples simultaneously, run `map` for every sample, indicating the same output but different sample names (as indicated in the example above).
 
 The outputs from `map` are BAM files with aligned reads to the hg38 reference genome and gene-specific fastq files. The final BAM is the ".adjusted.bam" when not using PICARD tools or ".adjusted.nodup.bam" when using PICARD tools. You can inspect/explore the BAM files using IGV.
+
+
+
 
 [Back to Summary](#summary)
 
@@ -349,9 +359,9 @@ The outputs from `map` are BAM files with aligned reads to the hg38 reference ge
 
 Example
 ```	
-	kir-mapper ncopy -output /home/USER/output 
-	or
-	kir-mapper ncopy -output /home/USER/output --exome
+kir-mapper ncopy -output /home/USER/output 
+or
+kir-mapper ncopy -output /home/USER/output --exome
 ```
 
 This function will estimate the number of copies for every KIR gene and sample. The final outputs are plots in PNG and HTML format with the coverage ratio between the target gene and the selected reference. Users must evaluate the plots to define the correct thresholds and edit the thresholds.txt file accordingly. If any threshold is modified, you must run `ncopy` again to reflect the modifications.
@@ -360,7 +370,7 @@ To evaluate the thresholds, using a browser, please open the .html files inside 
 
 Then, run ncopy again. This will update all the plots and the copy numbers for all samples.
 ```	
-	kir-mapper ncopy -output /home/USER/output 
+kir-mapper ncopy -output /home/USER/output 
 ```
 
 Alternatively, you can use the R script named `kir-mapper_plot_app.R` inside the /home/USER/output/ncopy. This script can assist you in defining the thresholds and updating the plots. When using this script, there is no need to run `copy` again in case you change any threshold.
@@ -381,7 +391,7 @@ Alternatively, you can use the R script named `kir-mapper_plot_app.R` inside the
 
 Example
 ```	
-	kir-mapper genotype -output /home/USER/output 
+kir-mapper genotype -output /home/USER/output 
 ```
 
 This function will call SNPs and InDels across all exons from KIR genes, by using freebayes and an internal algorithm to detect and remove unlike genotypes. It also phases the variants using whatshap. After, the program detects which KIR alleles are compatible with the observed variants.
@@ -424,9 +434,9 @@ Sometimes, `kir-mapper genotype` reports ambiguities, i.e., more than one combin
 		--telomeric:    calling haplotype only on the telomeric genes
 		(check manual for all the optionals)
 
-Example
+Example. Attention, this function only works with higher sample sizes.
 ```	
-	kir-mapper haplotype -output /home/USER/output --centromeric
+kir-mapper haplotype -output /home/USER/output --centromeric
 ```
 
 This function will call full haplotypes (all variants will be phased) using shapeit4. Afterward, it generates the predicted sequences for each gene and sample, comparing them with those in the IPD-IMGT/KIR database.

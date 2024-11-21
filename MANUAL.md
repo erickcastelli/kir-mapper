@@ -63,14 +63,14 @@ Please refer to the [README.md](README.md) for instructions on how to install ki
 Remember, you need a copy of the kir-mapper database to run any analysis. 
 
 ```
-	wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
-	unzip kir-mapper_db_latest.zip
+wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
+unzip kir-mapper_db_latest.zip
 ```
 
 kir-mapper uses a hidden configuration file (.txt) in your home folder containing the path for all necessary programs. If the program does not find this file, it enters the setup mode automatically. You can also call this mode by typing `kir-mapper setup` 
 
 ```
-	kir-mapper setup
+kir-mapper setup
 ```
 
 Follow the instructions provided to indicate the path of all necessary programs. kir-mapper might find the programs automatically. The only exception is the database and the PICARD jar file. 
@@ -97,7 +97,7 @@ The setup process will save the configuration file in your home folder.
 
 kir-mapper is a toolkit with methods for aligning, genotyping, and inferring haplotypes. You can see all functions by running the program without any parameter.
 ```
-	kir-mapper
+kir-mapper
 ```
 
 These are the commands (or functions) available:
@@ -186,14 +186,14 @@ This function will align or realign reads to KIR genes. Type `kir-mapper map` to
 <br/><br/>
 This is an example of a sample tagged as "Test." "Test" will be the name of the sample in all outputs.
 ```	
-	# Re-aligning a BAM file
-	kir-mapper map -bam original_BAM.bam -sample test -output /home/USER/output 
+# Re-aligning a BAM file
+kir-mapper map -bam original_BAM.bam -sample test -output /home/USER/output 
 
-	# Aligning FASTQ 
-	kir-mapper map -r1 R1.fastq.gz -r2 R2.fastq.gz -sample test -output /home/USER/output
+# Aligning FASTQ 
+kir-mapper map -r1 R1.fastq.gz -r2 R2.fastq.gz -sample test -output /home/USER/output
 
-	# Re-aligning a BAM file from exome
-	kir-mapper map -bam original_BAM.bam -sample test -output /home/USER/output --exome
+# Re-aligning a BAM file from exome
+kir-mapper map -bam original_BAM.bam -sample test -output /home/USER/output --exome
 ```
 
 **Note for exomes: you should indicate the --exome flag.**
@@ -202,10 +202,19 @@ This is an example of a sample tagged as "Test." "Test" will be the name of the 
 When evaluating many samples simultaneously, run `map` for every sample, indicating the same output but different sample names. Example:
 
 ```	
-	kir-mapper map -bam Teste1_BAM.bam -sample Test1 -output /home/USER/output 
-	kir-mapper map -bam Teste2_BAM.bam -sample Test2 -output /home/USER/output 
-	kir-mapper map -bam Teste3_BAM.bam -sample Test3 -output /home/USER/output 
+kir-mapper map -bam Teste1_BAM.bam -sample Test1 -output /home/USER/output 
+kir-mapper map -bam Teste2_BAM.bam -sample Test2 -output /home/USER/output 
+kir-mapper map -bam Teste3_BAM.bam -sample Test3 -output /home/USER/output 
 
+```
+
+
+Examples using the sample data provided in /samples
+```	
+kir-mapper map -r1 HG00096.R1.fastq.gz -r2 HG00096.R2.fastq.gz -sample HG00096 -output /home/USER/output 
+kir-mapper map -r1 HG02461.R1.fastq.gz -r2 HG02461.R2.fastq.gz -sample HG02461 -output /home/USER/output 
+kir-mapper map -bam HG00403.KIR.bam -sample HG00403 -output /home/USER/output 
+kir-mapper map -bam HG01583.KIR.bam -sample HG01583 -output /home/USER/output 
 ```
 
 The outputs from `map` are placed in a folder named "map" inside the output folder. Inside the "map" folder, you will find a folder for each sample processed using the same output but different sample names. 
@@ -280,9 +289,9 @@ This function will estimate the number of copies for every KIR gene and sample. 
 
 Examples
 ```	
-	kir-mapper ncopy -output /home/USER/output 
-	kir-mapper ncopy -output /home/USER/output --exome
-	kir-mapper ncopy -output /home/USER/output --exome -reference 5UPKIR
+kir-mapper ncopy -output /home/USER/output 
+kir-mapper ncopy -output /home/USER/output --exome
+kir-mapper ncopy -output /home/USER/output --exome -reference 5UPKIR
 ```
 
 **Note for exomes: you should indicate the --exome flag.**
@@ -355,7 +364,7 @@ This function will call SNPs and InDels across KIR genes and evaluate how these 
 
 Example
 ```	
-	kir-mapper genotype -output /home/USER/output 
+kir-mapper genotype -output /home/USER/output 
 ```
 <br/><br/>
 Note that you must indicate the same output folder used in the previous step (map and ncopy).
@@ -460,9 +469,9 @@ This method will use shapeit4 to call haplotypes within KIR genes and among KIR 
 
 Examples
 ```	
-	kir-mapper haplotype -output /home/USER/output
-	kir-mapper haplotype -output /home/USER/output --centromeric
-	kir-mapper haplotype -output /home/USER/output -target KIR3DL3,KIR2DL4
+kir-mapper haplotype -output /home/USER/output
+kir-mapper haplotype -output /home/USER/output --centromeric
+kir-mapper haplotype -output /home/USER/output -target KIR3DL3,KIR2DL4
 ```
 
 
