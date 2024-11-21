@@ -34,12 +34,12 @@ dependencies:
   - py-bgzip
   - tabix
   - parallel
-  - boost=1.74.0=py310h7c3ba0c_5
-  - boost-cpp=1.74.0=h75c5d50_8
+  - boost=1.85
+  - boost-cpp=1.85
   - cmake=3.29.2
   - zlib
   - htop
   - wget
   - openjdk=17
-  - shapeit4=4.2.0
+#  - shapeit4=4.2.2
   
