@@ -318,7 +318,7 @@ int main(int argc, const char * argv[]) {
 
     if (! fileExists(v_star)) {cout << endl << "You should run 'kir-mapper setup'. STAR not detected." << endl << endl; main_setup(); return 0;}
 
-    if (! fileExists(v_minimap)) {cout << endl << "You should run 'kir-mapper setup'. Minimap2 not detected." << endl << endl; main_setup(); return 0;}
+ //   if (! fileExists(v_minimap)) {cout << endl << "You should run 'kir-mapper setup'. Minimap2 not detected." << endl << endl; main_setup(); return 0;}
 
     if (v_whats != "DISABLED") {
         if (! fileExists(v_whats)) {cout << endl << "You should run 'kir-mapper setup'. Whatshap not detected." << endl << endl; main_setup(); return 0;}
