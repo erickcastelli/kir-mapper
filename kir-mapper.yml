@@ -41,5 +41,6 @@ dependencies:
   - htop
   - wget
   - openjdk=17
+  - picard=3.3.0
 #  - shapeit4=4.2.2
   

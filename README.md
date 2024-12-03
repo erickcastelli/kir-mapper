@@ -3,7 +3,7 @@ kir-mapper
 
 Castelli et al., 2024.
 
-Version 1.0 (November, 2024)
+Version 1.01 (December, 2024)
 
 Author: Erick C. Castelli (erick.castelli@unesp.br)
 
@@ -27,7 +27,9 @@ kir-mapper is a toolkit for calling SNPs, alleles, and haplotypes for KIR genes 
 
 [Install](#install)
 
-[-- Installing using Conda/Miniconda](#installing-using-conda)
+[-- Configuring kir-mapper environment using Conda/Miniconda](#configuring-kir-mapper-environment-using-conda)
+
+[-- Installing using Docker](#installing-using-docker)
 
 [-- Installing everything by yourself](#installing-everything-by-yourself)
 
@@ -49,7 +51,10 @@ kir-mapper is a toolkit for calling SNPs, alleles, and haplotypes for KIR genes 
 
 [Support](#support)
 
+[Version history](#version-history)
+
 [Manual](MANUAL.md)
+
 
 
 ## Important notes:
@@ -76,7 +81,7 @@ kir-mapper depends on a list of libraries and third-party programs, including sa
 You can choose how to install kir-mapper and its dependencies. You can opt for Conda, Docker, or install everything by yourself. We recommend Conda.
 
 
-### Installing using conda
+### Configuring kir-mapper environment using conda
 
 To install kir-mapper and all its dependencies, use Conda and the kir-mapper.yml file, as follows.
 
@@ -112,43 +117,38 @@ wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_l
 unzip kir-mapper_db_latest.zip
 ```
 
-6. Download PICARD tools.
-```
-wget --no-check-certificate https://github.com/broadinstitute/picard/releases/download/3.1.1/picard.jar
-```
-
-7. Use conda to create an environment for kir-mapper using the kir-mapper.yml from the repository
+6. Use conda to create an environment for kir-mapper using the kir-mapper.yml from the repository
 ```
 conda env create -f kir-mapper.yml
 ```
 
-8. Use conda to create an environment for shapeit4 using the shapeit4.yml from the repository
+7. Use conda to create an environment for shapeit4 using the shapeit4.yml from the repository
 ```
 conda env create -f shapeit4.yml
 ```
 
-9. Copy the shapeit4 binary to the kir-mapper conda environment. Replace **USER** by your username.
+8. Copy the shapeit4 binary to the kir-mapper conda environment. Replace **USER** by your username.
 ```
 cp /home/USER/miniconda3/envs/shapeit4/bin/shapeit4 /home/USER/miniconda3/envs/kir-mapper/bin
 ```
 
-10. Now, activate the kir-mapper environment.
+9. Now, activate the kir-mapper environment.
 ```
 conda activate kir-mapper
 ```
 
-11. From the kir-mapper directory (you are already there), create a new folder named `build` and enter it.
+10. From the kir-mapper directory (you are already there), create a new folder named `build` and enter it.
 ```
 mkdir build && cd build
 ```
 
-12. Compile kir-mapper from the /build folder. If this doesn't work, try step 11.
+11. Compile kir-mapper from the /build folder. If this doesn't work, try step 11.
 ```
 cmake ../src/
 make
 ```
 
-13. If step 12 doesn't work, try this. **Replace USER by your username.**
+12. If step 11 doesn't work, try this. **Replace USER by your username.**
 
 First, delete the build folder and create a new one
 ```
@@ -165,7 +165,7 @@ make
 ```
 
 
-14. If step 12 and 13 failed, try this. **Replace USER by your username.**
+13. If step 12 and 13 failed, try this. **Replace USER by your username.**
 
 First, delete the build folder and create a new one
 ```
@@ -185,7 +185,7 @@ make
 ```
 
 
-15. Copy the kir-mapper binary to the /usr/bin, or /usr/local/bin, or folder /bin from your kir-mapper environment (e.g.: /home/USER/miniconda3/envs/kir-mapper/bin). Alternativelly, you can run `kir-mapper` from the build folder. **Replace USER by your username.**
+14. Copy the kir-mapper binary to the /usr/bin, or /usr/local/bin, or folder /bin from your kir-mapper environment (e.g.: /home/USER/miniconda3/envs/kir-mapper/bin). Alternativelly, you can run `kir-mapper` from the build folder. **Replace USER by your username.**
 ```
 cp kir-mapper /home/USER/miniconda3/envs/kir-mapper/bin/
 ```
@@ -195,20 +195,64 @@ cp kir-mapper /usr/local/bin
 ```
 
 
-16. Run kir-mapper. The setup process usually starts automatically. If it doesn't, you can call it by typing the following:
+15. Run kir-mapper. The setup process usually starts automatically. If it doesn't, you can call it by typing the following:
 ```
 kir-mapper setup
 ```
 
-17. Follow the setup steps. kir-mapper will automatically detect most programs (BWA, samtools, bcftools, freebayes, etc). The only exception is the path for the database (from step 5) and for PICARD tools (from step 6). 
+16. Follow the setup steps. kir-mapper will automatically detect most programs (BWA, samtools, bcftools, freebayes, etc). The only exception is the path for the database (from step 5). 
 
-18. You are all set. Don't forget to activate the kir-mapper environment before using it.
+17. You are all set. Don't forget to activate the kir-mapper environment before using it.
 ```
 conda activate kir-mapper
 ```
 
 [Back to Summary](#summary)
 
+
+
+### Installing using Docker
+
+Here, we assume that Docker is already installed in your system.
+
+1. Clone the [Kir-mapper GitHub repo](https://github.com/erickcastelli/kir-mapper)
+```
+git clone https://github.com/erickcastelli/kir-mapper
+```
+
+
+2. Enter the kir-mapper repository.
+```
+cd kir-mapper
+```
+
+3. Build the kir-mapper image. This might take a while.
+```
+docker build -t kir-mapper -f Dockerfile .
+or
+sudo docker build -t kir-mapper -f Dockerfile .
+```
+
+4. Once completed, you may run the kir-mapper docker image like this:
+```
+docker run -it kir-mapper
+or
+sudo docker run -it kir-mapper
+```
+
+5. Now, type `kir-mapper`. The program should be available, with all dependencies and the database already set.
+```
+kir-mapper
+```
+
+6. By using this method, Docker has already downloaded the database, and the software is configured. There is no need to run `kir-mapper setup`
+
+
+7. To run Docker with access to the host system, you may use a command like this: `/home/USER` is the path to the folder where the data you want to process is, and `/data` is how you can access it inside the docker image.
+```
+docker run -it -v /home/USER:/data kir-mapper
+```
+[Back to Summary](#summary)
 
 
 
@@ -232,7 +276,8 @@ kir-mapper depends on a list of libraries and third-party programs, as follows:
 - STAR 2.7.10b or 2.7.11a
 - whatshap 2.2
 - shapeit4 4.2.2
-- picard-tools and java >= 11
+- picard-tools 3.3.0
+- java >= 11
 - bgzip and tabix
 
 
@@ -275,7 +320,7 @@ unzip kir-mapper_db_latest.zip
 kir-mapper setup
 ```
 
-8. Follow the setup steps. kir-mapper will automatically detect most programs if they are available in the system. The only exception is the path for the database (from steps 5 and 6) and for PICARD tools. You can also indicate the path for each binary.
+8. Follow the setup steps. kir-mapper will automatically detect most programs if they are available in the system. The only exception is the path for the database (from steps 5 and 6). You can also indicate the path for each binary.
 
 
 [Back to Summary](#summary)
@@ -303,6 +348,7 @@ Follow the instructions provided to indicate the path of all necessary programs.
 
 The setup process will save the configuration file in your home folder. This is an example of this file. You can edit it by using `nano ~/.kir-mapper`. **Replace USER by your username.**
 
+
 	db=/home/USER/kir-mapper/kir-mapper_db_latest/
 	samtools=/home/USER/miniconda3/envs/kir-mapper/bin/samtools
 	bcftools=/home/USER/miniconda3/envs/kir-mapper/bin/bcftools
@@ -312,6 +358,12 @@ The setup process will save the configuration file in your home folder. This is 
 	picard=/home/USER/miniconda3/envs/kir-mapper/bin/picard.jar
 	star=/home/USER/miniconda3/envs/kir-mapper/bin/STAR
 	shapeit4=/home/USER/miniconda3/envs/shapeit4/bin/shapeit4
+
+If you need to indicate a different configuration file while running kir-mappe, plase use the comand `-config` to indicate this alternative configuration file. Example: 
+
+```
+kir-mapper map -config /alternative_path/.kir-mapper
+```
 
 [Back to Summary](#summary)
 
@@ -493,6 +545,18 @@ For now, it is not possible to add new alleles to kir-mapper. We will update the
 ### Evaluating samples from different ancestry backgrounds 
 We do not recommend applying `kir-mapper ncopy` to samples from different populations. The thresholds are quite different among Europeans, Africans, and Asians, for instance. In our tests, we applied `kir-mapper map` and `kir-mapper copy` to all European or African samples separately. After that, we grouped all samples by using `kir-mapper group` to create a kir-mapper output with all samples before running `kir-mapepr genotype`.
 
+
+## Version history
+
+Version 1.01, December 2024
+	
+	**New features**
+	Included support for calling an alternative configuration file (-config).
+	Included the Dockerfile and support to Docker
+	Picard tools is automatically detected by the setup function.
+
+
+Version 1.0, November 2024, first kir-mapper release.
 
 ## Support
 

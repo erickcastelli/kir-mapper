@@ -1,7 +1,7 @@
 kir-mapper manual
 =======
 
-Version 1.0 (Nov, 2024)
+Version 1.01 (December, 2024)
 
 Author: Erick C. Castelli (erick.castelli@unesp.br)
 
@@ -73,7 +73,7 @@ kir-mapper uses a hidden configuration file (.txt) in your home folder containin
 kir-mapper setup
 ```
 
-Follow the instructions provided to indicate the path of all necessary programs. kir-mapper might find the programs automatically. The only exception is the database and the PICARD jar file. 
+Follow the instructions provided to indicate the path of all necessary programs. kir-mapper might find the programs automatically. The only exception is the database. 
 
 The setup process will save the configuration file in your home folder.
 
@@ -88,6 +88,13 @@ The setup process will save the configuration file in your home folder.
 	picard=/home/USER/miniconda3/envs/kir-mapper/bin/picard.jar
 	star=/home/USER/miniconda3/envs/kir-mapper/bin/STAR
 	shapeit4=/home/USER/miniconda3/envs/shapeit4/bin/shapeit4
+
+
+If you need to indicate a different configuration file while running kir-mappe, plase use the comand `-config` to indicate this alternative configuration file. Example: 
+
+```
+kir-mapper map -config /alternative_path/.kir-mapper
+```
 
 
 [Back to Summary](#summary)
@@ -163,6 +170,8 @@ This function will align or realign reads to KIR genes. Type `kir-mapper map` to
 
   		-downsample  downsampling for the adjustment [30]
 		(read downsampling to speed up the adjustment process. Do not change this!)
+
+ 		-config      indicate an alternative kir-mapper configuration file
 
   		--skip-unmapped   skip retrieving unmapped reads [not recommended]
 		(Do not process unmapped reads. You should avoid using this.)
