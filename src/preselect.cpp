@@ -72,7 +72,8 @@ void main_preselect ()
         screen_message (screen_size, 2, "-threads     number of threads [" + v_threads + "]", 1, v_quiet);
 //        screen_message (screen_size, 2, "bed         BED file to override the one in the database", 1, v_quiet);
         screen_message (screen_size, 2, "-buffer      number of sequences in buffer [" + to_string(v_buffer) + "]", 1, v_quiet);
-                        
+        screen_message (screen_size, 2, "-config      path to a kir-mapper configuration file", 1, v_quiet);
+                       
         if (v_bwa != "") {v_message = "[found at " + v_bwa + "]";}
         if (v_bwa == "") {v_message = "(!!! bwa not detected !!!)";}
         v_message = "-bwa         path to BWA " + v_message;

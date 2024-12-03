@@ -199,6 +199,7 @@ void main_ncopy ()
         screen_message (screen_size, 2, "-threads     number of threads [" + v_threads + "]", 1, v_quiet);
         screen_message (screen_size, 2, "-reference   KIR3DL3,5UPKIR,HLA-E,HLA-G [default: KIR3DL3]", 1, v_quiet);
         screen_message (screen_size, 2, "-samples     text file listing the samples to consider", 1, v_quiet);
+        screen_message (screen_size, 2, "-config      path to a kir-mapper configuration file", 1, v_quiet);
         screen_message (screen_size, 2, "--exome     only exons", 1, v_quiet);
         screen_message (screen_size, 2, "--quiet     quiet mode", 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);

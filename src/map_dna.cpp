@@ -207,6 +207,7 @@ void main_dna_map ()
         screen_message (screen_size, 2, "-error       the threshold for nucleotide quality trimming [" + to_string(v_mtrim_error).substr(0,4) + "]", 1, v_quiet);
         screen_message (screen_size, 2, "-tolerance   fraction of mismatches allowed [0.05 Illumina, 0.1 Nonapore]", 1, v_quiet);
         screen_message (screen_size, 2, "-downsample  downsampling for adjustment [" + to_string(downsampling) + "]", 1, v_quiet);
+        screen_message (screen_size, 2, "-config      path to a kir-mapper configuration file", 1, v_quiet);
 
         screen_message (screen_size, 2, "", 1, v_quiet);
         screen_message (screen_size, 2, "--skip-unmapped   skip retrieving unmapped reads [not recommended]", 1, v_quiet);

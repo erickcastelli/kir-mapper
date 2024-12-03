@@ -15,8 +15,11 @@
 #include <vector>
 #include <map>
 #include <boost/algorithm/string.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
 #include <thread>
 #include <pwd.h>
+
 
 #include <sys/ioctl.h> //for screen_size
 #include <stdio.h> //for screen_size
@@ -33,6 +36,7 @@
 #include "haplotypes.hpp"
 
 
+namespace fs = boost::filesystem;
 using namespace std;
 
 auto clock_start = std::chrono::steady_clock::now();
@@ -50,9 +54,9 @@ unsigned long v_memory = getTotalSystemMemory() / long(1024) / long(1024) / long
 //Program identification
 string Program_name = "kir-mapper";
 string Program_company = "GeMBio.Unesp";
-string Program_version = "1.0";
+string Program_version = "1.01";
 string Program_author = "Erick C. Castelli";
-string Program_date = "November 20th 2024";
+string Program_date = "December 3rd 2024";
 string Program_website = "https://github.com/erickcastelli/kir-mapper";
 
 
@@ -150,6 +154,7 @@ string v_bam = "";
 string v_mapout = "";
 string v_sample = "";
 string homedir = "";
+string bindir = "";
 int usechr = 0;
 string v_tag = "";
 int v_force_two_copies = 0;
@@ -243,8 +248,11 @@ void load_config (void)
 
 int main(int argc, const char * argv[]) {
 
-    
-    
+
+	fs::path full_path( fs::initial_path<fs::path>() );
+    full_path = fs::system_complete( fs::path( argv[0] ) );
+	bindir = boost::filesystem::canonical(full_path.parent_path()).string();
+	
     #if defined (__linux__)
         ostype = "linux";
     #endif
@@ -289,46 +297,6 @@ int main(int argc, const char * argv[]) {
     star_versions["2.7.11b"] = 1;
     star_versions["2.7.10b"] = 1;
 
-    homedir = getpwuid(getuid())->pw_dir;
-    configfile = homedir + "/.kir-mapper";
-    
-    
-    if (fileExists(configfile))
-    {
-        load_config();
-    }
-    else
-    {
-        cout << endl << endl;
-        cout << endl << endl;
-        cout << "Apparently, this is the first time you have run kir-mapper." << endl;
-        cout << "Starting configuration ..." << endl;
-        main_setup();
-        return 0;
-    }
-    
-    
-    if (! fileExists(v_bwa)) {cout << endl << "You should run 'kir-mapper setup'. BWA not detected." << endl << endl; main_setup(); return 0; }
-
-    if (! fileExists(v_samtools)) {cout << endl << "You should run 'kir-mapper setup'. Samtools not detected." << endl << endl; main_setup(); return 0;}
-
-    if (! fileExists(v_bcftools)) {cout << endl << "You should run 'kir-mapper setup'. Bcftools not detected." << endl << endl; main_setup(); return 0;}
-    
-    if (! fileExists(v_db)) {cout << endl << "You should run 'kir-mapper setup'. Database not detected." << endl << endl; main_setup(); return 0;}
-
-    if (! fileExists(v_star)) {cout << endl << "You should run 'kir-mapper setup'. STAR not detected." << endl << endl; main_setup(); return 0;}
-
- //   if (! fileExists(v_minimap)) {cout << endl << "You should run 'kir-mapper setup'. Minimap2 not detected." << endl << endl; main_setup(); return 0;}
-
-    if (v_whats != "DISABLED") {
-        if (! fileExists(v_whats)) {cout << endl << "You should run 'kir-mapper setup'. Whatshap not detected." << endl << endl; main_setup(); return 0;}
-    }
-  
-    if (v_picard != "DISABLED") {
-        if (! fileExists(v_picard)) {cout << endl << "You should run 'kir-mapper setup'. Picard tools not detected." << endl << endl; main_setup(); return 0;}
-    }
-    
-    if (! fileExists(v_freebayes)) {cout << endl << "You should run 'kir-mapper setup'. Freebayes not detected." << endl << endl; main_setup(); return 0;}
 
     
     int command_ok = 1;
@@ -777,7 +745,7 @@ int main(int argc, const char * argv[]) {
                string test = argv[b];
                if (test.substr(0,1) == "-") {continue;}
                v_minimap  = argv[b];
-               if (! fileExists(v_bwa))
+               if (! fileExists(v_minimap))
                {
                    v_message = "Invalid minimap: " + v_minimap;
                    warnings.push_back(v_message);
@@ -786,6 +754,22 @@ int main(int argc, const char * argv[]) {
                continue;
            }
 
+
+		   else if (str == "-config")
+           {
+               int b = a + 1;
+               if (b > (argc-1)) {continue;}
+               string test = argv[b];
+               if (test.substr(0,1) == "-") {continue;}
+               configfile  = argv[b];
+               if (! fileExists(configfile))
+               {
+                   v_message = "Invalid config file: " + configfile;
+                   warnings.push_back(v_message);
+                   command_ok = 0;
+               }
+               continue;
+           }
 
  
            
@@ -895,6 +879,57 @@ int main(int argc, const char * argv[]) {
     }
     
     
+	
+	homedir = getpwuid(getuid())->pw_dir;
+    if (configfile == "") 
+	{
+		configfile = homedir + "/.kir-mapper";
+		if (! fileExists(configfile)) 
+		{
+			configfile = bindir + "/.kir-mapper";
+		}
+	}
+	
+    if (fileExists(configfile))
+    {
+        load_config();
+    }
+    else
+    {
+        cout << endl << endl;
+        cout << endl << endl;
+        cout << "Apparently, this is the first time you have run kir-mapper." << endl;
+        cout << "Starting configuration ..." << endl;
+        main_setup();
+        return 0;
+    }
+    
+    
+    if (! fileExists(v_bwa)) {cout << endl << "You should run 'kir-mapper setup'. BWA not detected." << endl << endl; main_setup(); return 0; }
+
+    if (! fileExists(v_samtools)) {cout << endl << "You should run 'kir-mapper setup'. Samtools not detected." << endl << endl; main_setup(); return 0;}
+
+    if (! fileExists(v_bcftools)) {cout << endl << "You should run 'kir-mapper setup'. Bcftools not detected." << endl << endl; main_setup(); return 0;}
+    
+    if (! fileExists(v_db)) {cout << endl << "You should run 'kir-mapper setup'. Database not detected." << endl << endl; main_setup(); return 0;}
+
+    if (! fileExists(v_star)) {cout << endl << "You should run 'kir-mapper setup'. STAR not detected." << endl << endl; main_setup(); return 0;}
+
+ //   if (! fileExists(v_minimap)) {cout << endl << "You should run 'kir-mapper setup'. Minimap2 not detected." << endl << endl; main_setup(); return 0;}
+
+    if (v_whats != "DISABLED") {
+        if (! fileExists(v_whats)) {cout << endl << "You should run 'kir-mapper setup'. Whatshap not detected." << endl << endl; main_setup(); return 0;}
+    }
+  
+    if (v_picard != "DISABLED") {
+        if (! fileExists(v_picard)) {cout << endl << "You should run 'kir-mapper setup'. Picard tools not detected." << endl << endl; main_setup(); return 0;}
+    }
+    
+    if (! fileExists(v_freebayes)) {cout << endl << "You should run 'kir-mapper setup'. Freebayes not detected." << endl << endl; main_setup(); return 0;}
+
+	
+	
+	
     
     if (command_ok == 0) {v_r1 = ""; v_r0 = ""; v_bam = ""; v_output = ""; v_sample="";}
     command_ok = 0;

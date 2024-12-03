@@ -41,6 +41,7 @@ void main_join() {
         
         screen_message (screen_size, 0, "Other options:", 1, v_quiet);
         screen_message (screen_size, 2, "-db          path to the kir-mapper database", 1, v_quiet);
+        screen_message (screen_size, 2, "-config      path to a kir-mapper configuration file", 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);
         screen_message (screen_size, 2, "--full      full genotype, not only exons", 1, v_quiet);
         screen_message (screen_size, 2, "--quiet     quiet mode", 1, v_quiet);

@@ -77,6 +77,7 @@ extern string v_bam;
 extern string v_mapout;
 extern string v_sample;
 extern string homedir;
+extern string bindir;
 extern string v_bwa;
 extern string v_minimap;
 extern string v_star;

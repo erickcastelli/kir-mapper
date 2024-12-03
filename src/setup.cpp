@@ -738,7 +738,7 @@ star:
     // ********** PICARD  ************
         
         program = "Picard Tools";
-        command = "which picard-tools";
+        command = "which picard";
         string picard = "";
         cout << endl;
         cout << endl;
@@ -760,6 +760,12 @@ star:
             }
                 catch (const std::exception& e)
             { item = "";}
+			
+			if (item == "")
+			{
+				command = "which picard.jar";
+				item = GetStdoutFromCommand(command);
+			}
 
         picard_start:
             if (item != "")
@@ -779,13 +785,14 @@ star:
             if (item == "")
                 {
                     while (! fileExists(item)) {
-                        cout << "Please write the " << program << " path, or drag the binary bellow (or q to quit): " << endl;
+                        cout << "Please write the " << program << " path, or drag it bellow (or q to quit): " << endl;
                         cin >> item;
                         item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
                         if ((item == "q") || (item == "Q")) {cout << endl << endl; return;}
                         if (! fileExists(item))
                             {
                                 cout << "Invalid file or program." << endl;
+								
                             }
                         else {cout << program << " path: " << item << endl << endl;}
                     }
@@ -817,7 +824,7 @@ star:
     cout << endl;
     
 write:
-    cout << "Confirm writing the configuration file. (y or n) ";
+    cout << "Confirm writing the configuration file? (y or n) ";
     cin >> item;
     item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
     int valid = 0;

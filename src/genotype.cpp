@@ -57,6 +57,7 @@ void main_genotype() {
         screen_message (screen_size, 2, "-db              path to the kir-mapper database", 1, v_quiet);
         screen_message (screen_size, 2, "-threads         number of threads [" + v_threads + "]", 1, v_quiet);
         screen_message (screen_size, 2, "-target          which gene should be genotyped (e.g., -target KIR2DL1)", 1, v_quiet);
+        screen_message (screen_size, 2, "-config          path to a kir-mapper configuration file", 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);
         screen_message (screen_size, 2, "--full          full genotype, include introns", 1, v_quiet);
         screen_message (screen_size, 2, "--quiet         quiet mode", 1, v_quiet);

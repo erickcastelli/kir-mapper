@@ -61,6 +61,7 @@ void main_haplotypes() {
         screen_message (screen_size, 2, "-replicates      number of replicates [" + to_string(v_replicates) + "]", 1, v_quiet);
         screen_message (screen_size, 2, "-tag             tag to differentiate multiple haplotype runs", 1, v_quiet);
         screen_message (screen_size, 2, "-target          list of target genes (e.g., KIR2DL4,KIR3DL3)", 1, v_quiet);
+        screen_message (screen_size, 2, "-config          path to a kir-mapper configuration file", 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);
         screen_message (screen_size, 2, "--cds           include only the CDS (no 3'UTR) - default", 1, v_quiet);
         screen_message (screen_size, 2, "--exons         include exons and 3'UTR - need genotype --full", 1, v_quiet);
