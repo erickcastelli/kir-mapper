@@ -1,7 +1,7 @@
 kir-mapper
 =======
 
-Castelli et al., 2024.
+Castelli EC et al. kir-mapper: A Toolkit for Killer-Cell Immunoglobulin-Like Receptor (KIR) Genotyping From Short-Read Second-Generation Sequencing Data. HLA 2025 Mar;105(3):e70092. doi: 10.1111/tan.70092
 
 Version 1.01 (December, 2024)
 
