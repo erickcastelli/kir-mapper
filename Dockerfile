@@ -124,12 +124,12 @@ RUN echo "shapeit4=/usr/bin/shapeit4" >> ~/.kir-mapper
 RUN echo "star=/usr/bin/STAR" >> ~/.kir-mapper
 RUN echo "picard=/home/picard.jar" >> ~/.kir-mapper
 RUN echo "whatshap=/usr/bin/whatshap" >> ~/.kir-mapper
-RUN echo "db=/home/kir-mapper/kir-mapper_db_latest" >> ~/.kir-mapper
+RUN echo "db=/home/kir-mapper/kir-mapper_db_Dec_2024/" >> ~/.kir-mapper
 
 WORKDIR /home/kir-mapper
-RUN wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
-RUN unzip kir-mapper_db_latest.zip
-RUN rm kir-mapper_db_latest.zip
+RUN wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_Dec_2024.zip
+RUN unzip kir-mapper_db_Dec_2024.zip
+RUN rm kir-mapper_db_Dec_2024.zip
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y locales
 
