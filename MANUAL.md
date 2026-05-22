@@ -63,8 +63,8 @@ Please refer to the [README.md](README.md) for instructions on how to install ki
 Remember, you need a copy of the kir-mapper database to run any analysis. 
 
 ```
-wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
-unzip kir-mapper_db_latest.zip
+wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_Dec_2024.zip
+unzip kir-mapper_db_Dec_2024.zip
 ```
 
 kir-mapper uses a hidden configuration file (.txt) in your home folder containing the path for all necessary programs. If the program does not find this file, it enters the setup mode automatically. You can also call this mode by typing `kir-mapper setup` 
@@ -79,7 +79,7 @@ The setup process will save the configuration file in your home folder.
 
  This is an example of this file. **USER** must be replaced by your username. You can check it with `nano ~/.kir-mapper`:
 
-	db=/home/USER/kir-mapper/kir-mapper_db_latest/
+	db=/home/USER/kir-mapper/kir-mapper_db_Dec_2024/
 	samtools=/home/USER/miniconda3/envs/kir-mapper/bin/samtools
 	bcftools=/home/USER/miniconda3/envs/kir-mapper/bin/bcftools
 	bwa=/home/USER/miniconda3/envs/kir-mapper/bin/bwa
