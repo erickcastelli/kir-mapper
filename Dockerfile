@@ -139,7 +139,6 @@ RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
 
 ENV LANG en_US.UTF-8
 
-
 RUN apt-get install -y tabix
 
 RUN apt-get install -y parallel
