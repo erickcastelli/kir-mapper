@@ -114,7 +114,7 @@ cd kir-mapper
 5. Now, download the last version of the kir-mapper database and unzip it:
 ```
 wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_Dec_2024.zip
-unzip kir-mapper_db_Dec_2024.zip.zip
+unzip kir-mapper_db_Dec_2024.zip
 ```
 
 6. Use conda to create an environment for kir-mapper using the kir-mapper.yml from the repository
