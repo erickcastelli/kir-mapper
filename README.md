@@ -13,7 +13,7 @@ Castelli EC et al. kir-mapper: A Toolkit for Killer-Cell Immunoglobulin-Like Rec
 
 ## What is kir-mapper?
 
-kir-mapper is a toolkit for analyzing KIR genes from short-read second-generation sequencing (NGS) data. The toolkit provides functions for read alignment, variant calling for the hg38 reference genome, phasing, KIR allele calling, and KIR haplotype estimation. kir-mapper supports both single-end and paired-end Illumina sequencing data, in FASTQ or BAM format. It is compatible with Ion Torrent and Nanopore data upon some adjustments. This toolkit presents methods for:
+kir-mapper is a toolkit for analyzing KIR genes from Illumina short-read second-generation sequencing data and from Oxford Nanopore R10.4.1 data. The toolkit provides functions for read alignment, variant calling for the hg38 reference genome, phasing, KIR allele calling, and KIR haplotype estimation. It is compatible with Ion Torrent data upon some adjustments. This toolkit presents methods for:
 
 1. Getting unbiased alignments in the context of the hg38 reference genome.
 2. Estimating gene copy numbers.
@@ -21,7 +21,7 @@ kir-mapper is a toolkit for analyzing KIR genes from short-read second-generatio
 4. Calling KIR alleles, with reports listing potential new SNPs.
 5. Inferring haplotypes within KIR genes, and among KIR genes.
 
-kir-mapper was written in C++, and it is compatible with Linux. It may work on MacOS, but we haven't tested it. kir-mapper is a single program with multiple functions and provides an interface similar to that of samtools, BWA, or Bowtie2.
+kir-mapper was written in C++, and it is compatible with Linux. kir-mapper is a single program with multiple functions and provides an interface similar to that of samtools, BWA, or Bowtie2.
 
 ## Summary
 
@@ -65,7 +65,7 @@ kir-mapper was written in C++, and it is compatible with Linux. It may work on M
 
 Data compatibility: We tested kir-mapper with Illumina short-read data from whole-genome sequencing (WGS), whole-exome sequencing (WES), and targeted sequencing. We also tested it with Oxford Nanopore whole-genomes (R10.4.1 only). It might work with Ion Torrent with some adjustments.
 
-System compatibility: Linux, or WSL2/Linux. We have tested it with Ubuntu 22.04 LTS, and Ubuntu 22.04 LTS under WSL2. Other versions might be compatible. It may work on MacOS, but we haven't tested it.
+System compatibility: Linux, or WSL2/Windows. We have tested it with Ubuntu 22.04 LTS, and Ubuntu 22.04 LTS under WSL2. Other versions might be compatible. You can install it in MacOS via Docker.
 
 Read depth: Please note that read depth is essential. We recommend coverage of at least 30x for WGS and 50x for WES. 
 

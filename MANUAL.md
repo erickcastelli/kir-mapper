@@ -63,7 +63,7 @@ The original release was version 1.0.
 
 Data compatibility: We tested kir-mapper with Illumina short-read data from whole-genome sequencing (WGS), whole-exome sequencing (WES), and targeted sequencing. We also tested it with Oxford Nanopore whole-genomes (R10.4.1 only). It might work with Ion Torrent with some adjustments.
 
-System compatibility: Linux, or WSL2/Linux. We have tested it with Ubuntu 22.04 LTS, and Ubuntu 22.04 LTS under WSL2. Other versions might be compatible. It may work on MacOS, but we haven't tested it.
+System compatibility: Linux, or WSL2/Windows. We have tested it with Ubuntu 22.04 LTS, and Ubuntu 22.04 LTS under WSL2. Other versions might be compatible. You can install it in MacOS via Docker.
 
 Read depth: Please note that read depth is essential. We recommend coverage of at least 20x for WGS and 50x for WES. 
 
