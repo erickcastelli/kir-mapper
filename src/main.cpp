@@ -2,7 +2,7 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp.
 //  erick.castelli@unesp.br
 
 
@@ -54,9 +54,9 @@ unsigned long v_memory = getTotalSystemMemory() / long(1024) / long(1024) / long
 //Program identification
 string Program_name = "kir-mapper";
 string Program_company = "GeMBio.Unesp";
-string Program_version = "1.01";
+string Program_version = "1.1";
 string Program_author = "Erick C. Castelli";
-string Program_date = "December 3rd 2024";
+string Program_date = "June 15th 2026";
 string Program_website = "https://github.com/erickcastelli/kir-mapper";
 
 
@@ -159,6 +159,7 @@ int usechr = 0;
 string v_tag = "";
 int v_force_two_copies = 0;
 int v_update_call = 0;
+int v_nomarkdupl = 0;
 
 // For developers
 int v_debug = 0; // defines the debug mode
@@ -197,13 +198,13 @@ void main_help(void)
     screen_message (screen_size, 0, "", 1, v_quiet);
     
     screen_message (screen_size, 0, "Commands:  setup         configure kir-mapper", 1, v_quiet);
-    screen_message (screen_size, 0, "           map           map/align sequences (WGS, WES, Amplicons)", 1, v_quiet);
-    screen_message (screen_size, 0, "           ncopy         detect copy numbers", 1, v_quiet);
-    screen_message (screen_size, 0, "           genotype      call SNPs and alleles", 1, v_quiet);
-    screen_message (screen_size, 0, "           haplotype     estimate haplotypes and call alleles", 1, v_quiet);
-    screen_message (screen_size, 0, "           group         combine multiple kir-mapper map and ncopy runs", 1, v_quiet);
-    screen_message (screen_size, 0, "           join          join variants into a single VCF for plink", 1, v_quiet);
-    screen_message (screen_size, 0, "           select        preselect KIR-like sequences", 1, v_quiet);
+    screen_message (screen_size, 0, "           map           map/align sequences (WGS, exomes, amplicons)", 1, v_quiet);
+    screen_message (screen_size, 0, "           ncopy         estimate KIR gene copy numbers", 1, v_quiet);
+    screen_message (screen_size, 0, "           genotype      call SNPs and genotype KIR alleles", 1, v_quiet);
+    screen_message (screen_size, 0, "           haplotype     estimate haplotypes and resolve ambiguities ", 1, v_quiet);
+    screen_message (screen_size, 0, "           group         combine results from multiple map and ncopy runs", 1, v_quiet);
+    screen_message (screen_size, 0, "           join          join variants into a single VCF for PLINK", 1, v_quiet);
+    screen_message (screen_size, 0, "           select        pre-filter KIR-like reads (also performed by map)", 1, v_quiet);
     screen_message (screen_size, 0, "", 1, v_quiet);
     return;
 }
@@ -270,8 +271,7 @@ int main(int argc, const char * argv[]) {
     
     
     // tested program versions
-    samtools_versions["1.18"] = 1;
-    samtools_versions["1.19.2"] = 1;
+    samtools_versions["1.21"] = 1;
 
     bwa_versions["0.7.17"] = 1;
     bwa_versions["0.7.16"] = 1;
@@ -281,12 +281,13 @@ int main(int argc, const char * argv[]) {
     whats_versions["2.2"] = 1;
     whats_versions["2.3"] = 1;
 
-    freebayes_versions["v1.3.6"] = 1;
+    freebayes_versions["v1.3.8"] = 1;
 
-    bcf_versions["1.13"] = 1;
     bcf_versions["1.19"] = 1;
+    bcf_versions["1.20"] = 1;
 	
 	minimap_versions["2.24"] = 1;
+	minimap_versions["2.28"] = 1;
 
     R_versions["3.6.3"] = 1;
     R_versions["4.1.1"] = 1;
@@ -320,7 +321,7 @@ int main(int argc, const char * argv[]) {
                continue;
            }
 		   
-		   if ((str == "--update_calls") || (str == "--update_call"))
+		   if ((str == "--update-calls") || (str == "--update-call"))
            {
                v_update_call = 1;
                continue;
@@ -362,7 +363,7 @@ int main(int argc, const char * argv[]) {
 		    else if (str == "--nanopore")
            {
                v_exome = 0;
-               v_full = 1;
+               v_full = 0;
 			   v_nanopore = 1;
 			   v_skiptyping = 1;
 			   v_tolerance = 0.1;
@@ -389,7 +390,7 @@ int main(int argc, const char * argv[]) {
            }
  
 
-           else if (str == "--nopolyphase")
+           else if (str == "--no-polyphase")
            {
                v_nopolyphasing = 1;
                continue;
@@ -433,6 +434,18 @@ int main(int argc, const char * argv[]) {
                continue;
            }
            
+		   
+		   else if (str == "--skip-markdup")
+           {
+               v_nomarkdupl = 1;
+               continue;
+           }
+		   else if (str == "--skip-markduplicates")
+           {
+               v_nomarkdupl = 1;
+               continue;
+           }
+		   
            else if (str == "--rna")
            {
                v_rna = 1;
@@ -446,7 +459,7 @@ int main(int argc, const char * argv[]) {
                continue;
            }
 
-           else if (str == "--two_copies")
+           else if (str == "--two-copies")
            {
                v_force_two_copies = 1;
                continue;
@@ -915,7 +928,7 @@ int main(int argc, const char * argv[]) {
 
     if (! fileExists(v_star)) {cout << endl << "You should run 'kir-mapper setup'. STAR not detected." << endl << endl; main_setup(); return 0;}
 
- //   if (! fileExists(v_minimap)) {cout << endl << "You should run 'kir-mapper setup'. Minimap2 not detected." << endl << endl; main_setup(); return 0;}
+	 if (! fileExists(v_minimap)) {cout << endl << "You should run 'kir-mapper setup'. Minimap2 not detected." << endl << endl; main_setup(); return 0;}
 
     if (v_whats != "DISABLED") {
         if (! fileExists(v_whats)) {cout << endl << "You should run 'kir-mapper setup'. Whatshap not detected." << endl << endl; main_setup(); return 0;}

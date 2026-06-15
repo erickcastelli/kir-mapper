@@ -1,9 +1,9 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp.
 //  erick.castelli@unesp.br
-// Contributions from code on the web
+//  Contributions from code on the web and Claude
 
 
 #include <iostream>
@@ -61,7 +61,6 @@ void main_haplotypes() {
         screen_message (screen_size, 2, "-replicates      number of replicates [" + to_string(v_replicates) + "]", 1, v_quiet);
         screen_message (screen_size, 2, "-tag             tag to differentiate multiple haplotype runs", 1, v_quiet);
         screen_message (screen_size, 2, "-target          list of target genes (e.g., KIR2DL4,KIR3DL3)", 1, v_quiet);
-        screen_message (screen_size, 2, "-config          path to a kir-mapper configuration file", 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);
         screen_message (screen_size, 2, "--cds           include only the CDS (no 3'UTR) - default", 1, v_quiet);
         screen_message (screen_size, 2, "--exons         include exons and 3'UTR - need genotype --full", 1, v_quiet);
@@ -1027,9 +1026,6 @@ void main_haplotypes() {
                             removefile(outfas + ".tmp",v_debug);
 
                         }
-
-
-
 						return 1;
 					})
 			);
@@ -1054,7 +1050,7 @@ void main_haplotypes() {
     {
         if (valid_genes.find(gene.first) == valid_genes.end()) {continue;}
         string currentgene = gene.first;
-        string imgt = v_db + "/haplotypes/imgt_db/" + currentgene + "_exons.fasta";
+        string imgt = v_db + "/haplotypes/ipd-kir/" + currentgene + "_exons.fasta";
         map <string,string> known_sequences_name;
         map <string,string> known_sequences_seq;
         ifstream imgtdata (imgt.c_str());
@@ -1097,8 +1093,10 @@ void main_haplotypes() {
                 vector <string> data;
                 string subid = line.substr(1);
                 boost::split(data,subid,boost::is_any_of("_"));
-                id = data[0];
-                vec = data[1];
+                id = subid;
+                boost::replace_all(id, "_h1", "");
+                boost::replace_all(id, "_h2", "");
+                vec = data[data.size()-1];
                 continue;
             }
             std::transform(line.begin(), line.end(), line.begin(), ::toupper);
@@ -1387,9 +1385,5 @@ void main_haplotypes() {
 
  
     outdb.close();
-
-
-
-    
 
 }

@@ -1,9 +1,9 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp.
 //  erick.castelli@unesp.br
-// Contributions from code on the web
+//  Contributions from code from the web and Claude
 
 
 #include <iostream>
@@ -50,20 +50,24 @@ void main_genotype() {
         screen_message (screen_size, 0, "", 1, v_quiet);
         
         screen_message (screen_size, 0, "Mandatory options:", 1, v_quiet);
-        screen_message (screen_size, 2, "-output         output folder (same as map and ncopy)", 1, v_quiet);
+        screen_message (screen_size, 2, "-output          output folder (same as map and ncopy)", 1, v_quiet);
         screen_message (screen_size, 2, "", 1, v_quiet);
         
         screen_message (screen_size, 0, "Other options:", 1, v_quiet);
         screen_message (screen_size, 2, "-db              path to the kir-mapper database", 1, v_quiet);
         screen_message (screen_size, 2, "-threads         number of threads [" + v_threads + "]", 1, v_quiet);
-        screen_message (screen_size, 2, "-target          which gene should be genotyped (e.g., -target KIR2DL1)", 1, v_quiet);
+        screen_message (screen_size, 2, "-target          restrict genotyping to a specific gene (e.g., KIR2DL1)", 1, v_quiet);
         screen_message (screen_size, 2, "-config          path to a kir-mapper configuration file", 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);
-        screen_message (screen_size, 2, "--full          full genotype, include introns", 1, v_quiet);
-        screen_message (screen_size, 2, "--quiet         quiet mode", 1, v_quiet);
-        screen_message (screen_size, 2, "--nopolyphase   skip phasing tri/tetraploids", 1, v_quiet);
-        screen_message (screen_size, 2, "--two_copies    force two copies when KIR gene is present", 1, v_quiet);
-        screen_message (screen_size, 2, "--update_calls  update the allele calls keeping the current VCF", 1, v_quiet);
+        screen_message (screen_size, 0, "Flags:", 1, v_quiet);
+        screen_message (screen_size, 2, "--full           full genotyping, including intronic regions [beta]", 1, v_quiet);
+        screen_message (screen_size, 2, "--quiet          quiet mode", 1, v_quiet);
+        screen_message (screen_size, 2, "--no-polyphase   disable phasing for tri/tetraploid samples", 1, v_quiet);
+        screen_message (screen_size, 2, "--two-copies     force diploid copy number when the gene is present", 1, v_quiet);
+        screen_message (screen_size, 2, "--update-calls   update allele calls while retaining the existing VCF", 1, v_quiet);
+        screen_message (screen_size, 2, "--skip-markdup   skip marking duplicates with Picard", 1, v_quiet);
+        screen_message (screen_size, 2, "--nanopore       input is Nanopore data (requires -bam)", 1, v_quiet);
+        screen_message (screen_size, 2, "--exome          input is whole-exome sequencing data (exons only)", 1, v_quiet);
 		
 		
 
@@ -98,10 +102,15 @@ void main_genotype() {
 
     ifstream file_db(v_db_info.c_str());
     int db_version_ok = 0;
+    int db_engine_ok = 0;
     for( std::string line; getline( file_db, line ); )
     {
         if (line == "kir-mapper:1") {
             db_version_ok = 1;
+            continue;
+        }
+        if (line == "engine:1.1") {
+            db_engine_ok = 1;
             continue;
         }
         vector<string> db_data;
@@ -127,7 +136,7 @@ void main_genotype() {
     
 
     
-    if (db_version_ok == 0) {
+    if ((db_version_ok == 0) || (db_engine_ok == 0)){
         v_message = "This database is not compatible with this version of kir-mapper.";
         warnings.push_back (v_message);
         precheck = 0;
@@ -146,13 +155,20 @@ void main_genotype() {
         precheck = 0;
     }
 
+
     if (((! fileExists(v_output)) || (! fileExists(v_output + "/map"))) || (! fileExists(v_output + "/ncopy")))
     {
         v_message = "You must indicate a valid output folder, with 'map' and 'ncopy'";
         warnings.push_back (v_message);
+        if (v_force_two_copies)
+        {
+            v_message = "You need to run 'ncopy' even when forcing two copies per gene.";
+            warnings.push_back (v_message);
+        }
         precheck = 0;
     }
-    
+
+
     debug_message("Checking output - done");
 
 
@@ -233,7 +249,7 @@ void main_genotype() {
     
     map <pair<string, string>,int> regions;
     map <string,int> valid_genes;
-    vector <string> filedb;
+
     string path_map = v_db + "/genotype/bed/";
     string typegen = "";
     if (v_exome == 1) {typegen = ".CDS.";}
@@ -268,11 +284,8 @@ void main_genotype() {
     
     
     
-    debug_message("Loading copy numbers - start");
 
-    
-    
-    
+    debug_message("Loading copy numbers - start");
     // Loading Copy Numbers
     v_message = " > Loading copy numbers";
     screen_message (screen_size, 0, v_message, 1, v_quiet);
@@ -335,7 +348,7 @@ void main_genotype() {
     
     
     
-	
+    map <string,string> filedb;	
     debug_message("Loading bams - start");
 	// Loading BAM list
     v_message = " > Loading BAM files";
@@ -354,34 +367,35 @@ void main_genotype() {
         string bamuniquenodup = dir_path + "/" + sample + ".unique.nodup.bam";
  
  
-        if (fileExists(bamadjnodup))
-        {
-            string cmd = v_samtools + " view -H " + bamadjnodup;
-            string head = GetStdoutFromCommand(cmd.c_str());
-            int validbam = 0;
-            if (head.find("kir-mapper") != std::string::npos) {validbam = 1;}
-            if (head.find("hla-mapper") != std::string::npos) {validbam = 1;}
-            if (validbam != 1) {continue;}
-            
-            cmd = v_samtools + " samples " + bamadjnodup;
-            head = GetStdoutFromCommand(cmd.c_str());
-            vector <string> fields;
-            string sample_id = "";
-            if (head.size() != 0)
-            {
-                boost::split(fields,head,boost::is_any_of("\t"));
-                sample_id = fields[0];
-            }
-            if (sample_id == "") {continue;}
-			
-			pair <string,string> k;
-			k = make_pair(sample_id,"KIR3DL3");
-			if (copynumber.find(k) == copynumber.end()) {continue;}
-			
-            if (failed_samples.find(sample_id) == failed_samples.end()) {filedb.push_back(bamadjnodup);}
-            continue;
-        }
- 
+        if (v_nomarkdupl == 0) {
+			if (fileExists(bamadjnodup))
+			{
+				string cmd = v_samtools + " view -H " + bamadjnodup;
+				string head = GetStdoutFromCommand(cmd.c_str());
+				int validbam = 0;
+				if (head.find("kir-mapper") != std::string::npos) {validbam = 1;}
+				if (head.find("hla-mapper") != std::string::npos) {validbam = 1;}
+				if (validbam != 1) {continue;}
+				
+				cmd = v_samtools + " samples " + bamadjnodup;
+				head = GetStdoutFromCommand(cmd.c_str());
+				vector <string> fields;
+				string sample_id = "";
+				if (head.size() != 0)
+				{
+					boost::split(fields,head,boost::is_any_of("\t"));
+					sample_id = fields[0];
+				}
+				if (sample_id == "") {continue;}
+				
+				pair <string,string> k;
+				k = make_pair(sample_id,"KIR3DL3");
+				if (copynumber.find(k) == copynumber.end()) {continue;}
+				
+				if (failed_samples.find(sample_id) == failed_samples.end()) {filedb[sample_id] = bamadjnodup;}
+				continue;
+			}
+		}
 
  
         if ((! fileExists(bamadjnodup)) && (fileExists(bamadj)))
@@ -410,7 +424,7 @@ void main_genotype() {
 			k = make_pair(sample_id,"KIR3DL3");
 			if (copynumber.find(k) == copynumber.end()) {continue;}
 			
-            if (failed_samples.find(sample_id) == failed_samples.end()) {filedb.push_back(bamadj);}
+            if (failed_samples.find(sample_id) == failed_samples.end()) {filedb[sample_id] = bamadj;}
             continue;
         }
 		
@@ -442,7 +456,7 @@ void main_genotype() {
 			k = make_pair(sample_id,"KIR3DL3");
 			if (copynumber.find(k) == copynumber.end()) {continue;}
 			
-            if (failed_samples.find(sample_id) == failed_samples.end()) {filedb.push_back(bamunique);}
+            if (failed_samples.find(sample_id) == failed_samples.end()) {filedb[sample_id] = bamunique;}
             continue;
         }
 		
@@ -457,7 +471,7 @@ void main_genotype() {
         return;
     }
 	
-    v_message = " > Processing " + to_string(filedb.size()) + " BAM files with copy number data";
+    v_message = " > Processing " + to_string(filedb.size()) + " BAM files with copy number information";
     screen_message (screen_size, 0, v_message, 1, v_quiet);
 
     debug_message("Loading bams - done");
@@ -505,10 +519,15 @@ void main_genotype() {
         GetStdoutFromCommand(cmd.c_str());
         cmd = "mkdir " + v_output_adjusted + gene + "/calls/";
         GetStdoutFromCommand(cmd.c_str());
+        cmd = "mkdir " + v_output_adjusted + gene + "/bam/";
+        GetStdoutFromCommand(cmd.c_str());
 
        debug_message("Creating output structure for this gene - done");
 
-        
+       
+ 
+
+
         
         debug_message("Loading ignored positions - start");
 
@@ -552,7 +571,81 @@ void main_genotype() {
 		}
 		exon.close();
 	    debug_message("Loading exon positions - done");
- 
+
+
+
+
+
+        v_message = " > " + gene + " : Checking coverage and downsampling when necessary";
+        screen_message (screen_size, 0, v_message, 1, v_quiet);
+        map<string, string> filedb_clone = filedb;
+
+
+        string bedfull = v_db + "/genotype/bed/" + gene + ".full.bed";
+
+        cmd = "cat " + bedfull;
+        string out = GetStdoutFromCommand(cmd);
+        vector <string> coordinates;
+        boost::split(coordinates,out,boost::is_any_of("\t"));
+        string chrlocal = coordinates[0];
+        int start = stoi(coordinates[1]) - 200;
+        int end = stoi(coordinates[2]) + 200;
+        
+        
+        ThreadPool pool_downsample(stoi(v_threads));
+        std::vector< std::future<int> > results_downsample;
+        
+        for (auto file : filedb)
+        {
+            string sample = file.first;
+            string path = file.second;
+
+            results_downsample.emplace_back(
+                pool_downsample.enqueue([sample, path, bedfull, start, end, chrlocal, v_output_adjusted, gene, &filedb_clone]
+                    {
+
+                        string outbam = v_output_adjusted + "/" + gene + "/bam/" + sample + "." + gene + ".downsampled.bam";
+                        if (fileExists(outbam)) {filedb_clone[sample] = outbam; return 1;}
+                        string covoutcmd = v_samtools + " depth -b " + bedfull + " " + path;
+                        string covout = GetStdoutFromCommand(covoutcmd);
+                        vector <string> lines;
+                        boost::split(lines,covout,boost::is_any_of("\n"));
+                        float count = 0;
+                        float sum = 0;
+                        for (auto line : lines)
+                        {
+                            if (line == "") {continue;}
+                            vector <string> data;
+                            boost::split(data,line,boost::is_any_of("\t"));
+                            count++;
+                            sum = sum + stof(data[2]);
+                        }
+                        float cov = sum / count;
+                        if (cov > 100) {
+                            float reduction = 100/cov;
+                            reduction = 10 + reduction;
+                            
+                            string cmd = v_samtools + " view -bh -s " + to_string(reduction) + " " + path + " " + chrlocal + ":" + to_string(start) + "-" + to_string(end) + " > " + outbam;
+                            string out = GetStdoutFromCommand(cmd);
+        
+                            cmd = v_samtools + " index " + outbam;
+                            out = GetStdoutFromCommand(cmd);
+
+                            mtx_genotype.lock();
+                            filedb_clone[sample] = outbam;
+                            mtx_genotype.unlock();
+                        }
+                        return 1;
+                    })
+            );
+        }
+        for(auto && result: results_downsample){result.get();} // waiting for all threads 
+
+
+
+
+
+
         
 		
         
@@ -588,7 +681,7 @@ void main_genotype() {
 					boost::split(subchr,region,boost::is_any_of(":"));
 					vector <string> limits;
 					boost::split(limits,subchr[1],boost::is_any_of("-"));
-					string subregions_txt = split_region(stoi(v_threads),subchr[0],stoi(limits[0]),stoi(limits[1]),20);
+					string subregions_txt = splitSegmentIntoChunks(400, stoi(limits[0]), stoi(limits[1]), 20, subchr[0]);
 					boost::split(subregions,subregions_txt,boost::is_any_of("\n"));
 					break;
 				}
@@ -613,9 +706,21 @@ void main_genotype() {
         
  
         
-			string v_ref_gene_bam = "";
-			if (v_exome == 0) {v_ref_gene_bam = v_resources + "/bam/" + gene + "_chr.bam";}
-			if (v_exome == 1) {v_ref_gene_bam = v_resources + "/bam/" + gene + "_chr.cds.bam";}
+			string v_ref_gene_bam = v_resources + "/bam/" + gene + "_chr.bam";
+            if (v_exome == 1)
+            {
+                string bamout = v_output_adjusted + "/" + gene + "/vcf/" + gene + ".reference.bam";
+                string cmd = v_samtools + " view -@ " + v_threads + " -hb -R " + v_db + "/genotype/lists/" + gene + ".cds.1allele.txt -o " + bamout + " " + v_ref_gene_bam;
+                string out = GetStdoutFromCommand(cmd);
+
+                cmd = v_samtools + " index -@ " + v_threads + " " + bamout;
+                out = GetStdoutFromCommand(cmd);
+
+                v_ref_gene_bam = bamout;
+
+            }
+
+
 
 			if (! fileExists(v_ref_gene_bam)) {continue;}
 			string cmd = v_samtools + " samples " + v_ref_gene_bam;
@@ -651,7 +756,9 @@ void main_genotype() {
 			CP.close();
 	 
         
-        
+
+
+ 
         
 			ThreadPool pool(stoi(v_threads));
 			std::vector< std::future<int> > results;
@@ -659,9 +766,10 @@ void main_genotype() {
 			int call_count = 0;
 			for (auto region : subregions)
 			{
-				call_count++;
+				if (region == "") {continue;}
+                call_count++;
 				results.emplace_back(
-					pool.enqueue([call_count,region,gene,filedb,&copynumber,outcp,v_ref_gene_bam,v_output_adjusted]
+					pool.enqueue([call_count,region,gene,filedb_clone,&copynumber,outcp,v_ref_gene_bam,v_output_adjusted]
 						{
 							
 							string current_region = "";
@@ -674,15 +782,18 @@ void main_genotype() {
 							
 							string vcfout = v_output_adjusted + gene + "/vcf/" + gene + "." + region_out + ".vcf";
 							string vcflog = v_output_adjusted + gene + "/vcf/log/" + gene + "." + region_out + ".freebayes.log";
-							string cmd = v_freebayes + "  --report-all-haplotype-alleles --use-best-n-alleles 8 --min-alternate-count 3 -A " + outcp + " -f " + v_ref + " -r " + current_region + " -v " + vcfout + " > " + vcflog;
+							string cmd = v_freebayes + "  -m 20 -q 20 -C 2 -E 2 -A " + outcp + " -f " + v_ref + " -r " + current_region + " -v " + vcfout + " > " + vcflog;
+							if (v_nanopore == 1) {
+                                cmd = v_freebayes + "  -m 20 -q 10 -C 4 -E 2 -A " + outcp + " -f " + v_ref + " -r " + current_region + " -v " + vcfout + " > " + vcflog;
+                            }
 
 					string samplelist = v_output_adjusted + gene + "/vcf/bamlist.txt";
 					ofstream OUT;
 					OUT.open (samplelist.c_str());
 					
-					for (auto item : filedb)
+					for (auto item : filedb_clone)
 					{
-						OUT << item << endl;
+						OUT << item.second << endl;
 					}
 					cmd.append (" -L " + samplelist);
 					cmd.append (" -b " + v_ref_gene_bam);
@@ -768,6 +879,8 @@ void main_genotype() {
 					boost::replace_all(ref, ".adjusted.bam", "");
 					boost::replace_all(ref, ".unique.bam", "");
 					boost::replace_all(ref, ".unique.nodup.bam", "");
+					boost::replace_all(ref, ".downsampled.bam", "");
+                    boost::replace_all(ref, "." + gene, "");
 					samples[ref] = 1;
 					
 					v_command = v_samtools + " view " + line + " chr19:54839300-54839800";
@@ -908,6 +1021,8 @@ void main_genotype() {
 					boost::replace_all(ref, ".adjusted.bam", "");
 					boost::replace_all(ref, ".unique.bam", "");
 					boost::replace_all(ref, ".unique.nodup.bam", "");
+                    boost::replace_all(ref, ".downsampled.bam", "");
+                    boost::replace_all(ref, "." + gene, "");
 					samples[ref] = 1;
 					
 					v_command = v_samtools + " view " + line + " chr19:54736020-54736920";
@@ -1021,7 +1136,8 @@ void main_genotype() {
 
 			for (auto region : subregions)
 			{
-				string current_region = "";
+				if (region == "") {continue;}
+                string current_region = "";
 				current_region = region;
 				boost::replace_all(current_region, "chrchr", "chr");
 				
@@ -1314,7 +1430,6 @@ void main_genotype() {
         
 			string outvcftrimtreatednorm = v_output_adjusted + gene + "/vcf/" + gene + ".combined.trim.treated.norm.vcf";
 			debug_message("VCF Normalization - start");
-//			string ref = v_db + "/reference/hg38/" + chr_hg38[gene] + ".fasta";
 			string ref = v_db + "/reference/hg38/reference.fasta";
 			cmd = v_bcftools + " norm -f " + ref + " -o " + outvcftrimtreatednorm + " " + outvcftrimtreated;
 			GetStdoutFromCommand(cmd.c_str());
@@ -1386,7 +1501,6 @@ void main_genotype() {
 				k = make_pair(sample,gene);
 				if (copynumber[k] == "0") {continue;}
 				if (copynumber[k] == "1") {continue;}
-	//            if (copynumber[k] == "3") {continue;}
 				if (copynumber[k] == "4") {continue;}
 				
 				string vcfout = v_output_adjusted + gene + "/phasing/split_vcf/" + sample + ".vcf";
@@ -1398,9 +1512,10 @@ void main_genotype() {
 				GetStdoutFromCommand(cmd.c_str());
 				
 				string bam = "";
-				for (auto item: filedb)
+				for (auto item: filedb_clone)
 				{
-					if (item.find(sample) != std::string::npos) {bam = item;}
+					string path = item.second;
+                    if (path.find(sample) != std::string::npos) {bam = path;}
 				}
 				
 				if (copynumber[k] == "2")
@@ -1776,18 +1891,32 @@ void main_genotype() {
         vcffilein.close();
         debug_message("Loading data for SNP comparison...end");
         
+        
+        
+        
+        
+        
+        
         debug_message("Loading combinations...start");
-        vector <string> main_combination_list;
-        map <string,int> used;
-        for (auto itemA : ref_names)
-        {
-            for (auto itemB : ref_names)
-            {
-                if (used.find(itemB.first) != used.end()) {continue;}
-                string comb = itemA.first + "\t" + itemB.first;
-                main_combination_list.push_back(comb);
+
+ 
+
+ 
+        vector <string> main_combination_list_2cp;
+        if (highcp[gene] >= 2) {
+            string combfile = "";
+            if (v_exome == 1) {combfile = v_resources + "/lists/" + gene + ".cds.2alleles.txt";}
+            if (v_exome == 0) {combfile = v_resources + "/lists/" + gene + ".full.2alleles.txt";}
+            if (! fileExists(combfile)) {call_higher_cn = 0;}
+            if (fileExists(combfile)) {
+                ifstream comb (combfile .c_str());
+                for( std::string line; getline( comb, line ); )
+                {
+                    if (line == "") {continue;}
+                    main_combination_list_2cp.push_back(line);
+                }
+                comb.close();
             }
-            used[itemA.first] = 1;
         }
         
         
@@ -1809,6 +1938,7 @@ void main_genotype() {
         }
         
         vector <string> main_combination_list_4cp;
+
 
         
         debug_message("Loading combinations...end");
@@ -1867,14 +1997,12 @@ void main_genotype() {
 
 
         for (auto item : ordered_samples)
-//        for (auto item : sample_names)
         {
-//            string sample = item.first;
             string sample = item;
             loop++;
             
             results_genotype.emplace_back(
-                poolsamples.enqueue([loop,sample, &copynumber, gene, nullallele, ref_names, &ps_list, &ps_positions, &sample_snp, &ref_data, &main_combination_list, &main_combination_list_3cp, &main_combination_list_4cp, v_output_adjusted, call_higher_cn, unresolved, &final_results, chr, &done, &filedb,&snp_data]
+                poolsamples.enqueue([loop,sample, &copynumber, gene, nullallele, ref_names, &ps_list, &ps_positions, &sample_snp, &ref_data, &main_combination_list_2cp, &main_combination_list_3cp, &main_combination_list_4cp, v_output_adjusted, call_higher_cn, unresolved, &final_results, chr, &done, &filedb,&snp_data]
                     {
  
             string check_out_file = v_output_adjusted + gene + "/reports/" + sample + "." + gene + ".txt";
@@ -1936,11 +2064,14 @@ void main_genotype() {
                         if (item == "") {continue;}
                         selected_alleles.push_back(item);
                     }
-                    if (selected_alleles.size() >= 25) {break;}
+                    if (selected_alleles.size() >= 30) {break;}
                 }
             }
                 
             debug_message("End allele selection for " + sample);
+
+
+
 
             map <float,string> results_ratio;
             map <float,string> results_dif;
@@ -2069,16 +2200,19 @@ void main_genotype() {
             }
 
 
+
             
             if (cn == "2")
             {
                 
-                for (auto comb : main_combination_list)
+                for (auto comb : main_combination_list_2cp)
                 {
                     vector <string> data;
-                    boost::split(data,comb,boost::is_any_of("\t"));
+                    boost::split(data,comb,boost::is_any_of(","));
+
                     string alleleA = data[0];
                     string alleleB = data[1];
+
                     
                     if (std::find(selected_alleles.begin(), selected_alleles.end(), alleleA) == selected_alleles.end())
                     {
@@ -2630,7 +2764,7 @@ void main_genotype() {
             
             string line = sample + "\t" + cn + "\t" + call_line.substr(1) + "\t" + to_string(ratio) + "\t" + miss_line.substr(1);
             
-            if (count_calls > 5) {
+            if (count_calls > 10) {
                 if (cn == "1") {line = sample + "\t" + cn + "\t" + unresolved + "\tNA\tNA";}
                 if (cn == "2") {line = sample + "\t" + cn + "\t" + unresolved + "+" + unresolved + "\tNA\tNA";}
                 if (cn == "3") {line = sample + "\t" + cn + "\t" + unresolved + "+" + unresolved + "+" + unresolved + "\tNA\tNA";}
@@ -2668,12 +2802,7 @@ void main_genotype() {
             );// end thread
             
 
- //           if (results_genotype.size() == 2000)
- //           {
- //               for (auto && result: results_genotype){result.get();} // waiting for all threads
- //               results_genotype.clear();
- //           }
-
+ 
 
             //break;
         } //end sample

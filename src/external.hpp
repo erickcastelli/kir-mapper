@@ -1,7 +1,7 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp
 //  erick.castelli@unesp.br
 
 
@@ -77,7 +77,6 @@ extern string v_bam;
 extern string v_mapout;
 extern string v_sample;
 extern string homedir;
-extern string bindir;
 extern string v_bwa;
 extern string v_minimap;
 extern string v_star;
@@ -156,5 +155,6 @@ extern map <pair<string,string>,string> genes_avaliable_in_sample;
 
 extern int v_force_two_copies;
 extern int v_update_call;
+extern int v_nomarkdupl;
 
 #endif /* external_h */

@@ -1,6 +1,6 @@
 //
 //  kir-mapper
-//  Copyright © 2024 GeMBio.Unesp. All rights reserved.
+//  Copyright 2026 GeMBio.Unesp. All rights reserved.
 //
 
 #ifndef ncopy_hpp

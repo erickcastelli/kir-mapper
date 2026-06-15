@@ -1,9 +1,9 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp.
 //  erick.castelli@unesp.br
-// Contributions from code on the web
+//  Contributions from code on the web and Claude
 
 
 #include <iostream>
@@ -24,6 +24,20 @@
 #include <boost/iostreams/filter/gzip.hpp>
 #include <mutex>
 
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
+#include <regex>
+#include <set>
+#include <sstream>
+#include <unordered_map>
+#include <utility>
+#include <omp.h>
+
+#include <unordered_set>
+#include <memory>
+#include <iomanip>
+
 #include "map_dna.hpp"
 #include "external.hpp"
 #include "functions.hpp"
@@ -41,10 +55,325 @@ vector <string> selected_results_trim_r2;
 //unordered_map <string,int> motifs_master;
 
 // for Nanopore
-int long_minreadsize = 350;
+int long_minreadsize = 800;
 map <pair<string,string>,int> long_score;
 map <string,int> long_size;
 map <string,int> long_subreads;
+float maxdiv = 0.05;
+
+
+int getMismatchesFromSAM(const std::string& samLine) {
+    size_t pos = samLine.find("\tNM:i:");
+    if (pos == std::string::npos)
+        return 10000;
+
+    pos += 6;
+    size_t end = samLine.find('\t', pos);
+    try {
+        return std::stoi(samLine.substr(pos, end - pos));
+    } catch (...) {
+        return 10000;
+    }
+}
+
+int getAlignedLengthFromSAM(const std::string& samLine) {
+    size_t pos = 0;
+    for (int i = 0; i < 5; ++i) {
+        pos = samLine.find('\t', pos);
+        if (pos == std::string::npos)
+            return 0;
+        ++pos;
+    }
+
+    size_t end = samLine.find('\t', pos);
+    std::string cigar = samLine.substr(pos, end - pos);
+
+    if (cigar == "*")
+        return 0;
+
+    int alignedLen = 0;
+    int num = 0;
+    for (char c : cigar) {
+        if (std::isdigit(c)) {
+            num = num * 10 + (c - '0');
+        } else {
+            if (c == 'M' || c == 'I' || c == 'D' || c == 'X' || c == '=')
+                alignedLen += num;
+            num = 0;
+        }
+    }
+    return alignedLen;
+}
+
+
+// Explicitly defined return type
+struct PairResult {
+    std::pair<std::string, std::string> allele_pair;
+    double score = -999999.0;
+    int pair_reads = 0;
+    double mean_nm = 0.0;
+    int unique_a = 0;
+    int unique_b = 0;
+    int shared = 0;
+};
+
+namespace AlleleSelectorInternal {
+
+    struct AlignmentRecord {
+        std::string read_name;
+        std::string ref_name;
+        int nm = 0;
+        int mapq = 0;
+        int aln_bp = 0;
+        int clip_bp = 0;
+        int start = 0;
+        int end = 0;
+    };
+
+    class RefStats {
+    public:
+        std::string name;
+        double weighted_support = 0.0;
+        double total_nm = 0.0;
+        double total_mapq = 0.0;
+        long long aligned_bp = 0;
+        long long clipped_bp = 0;
+        std::unordered_set<int> positions;
+
+        RefStats() = default;
+        RefStats(std::string n) : name(std::move(n)) {}
+
+        void add_alignment(int nm, int mapq, int aln_bp, int clip_bp, int start, int end, double weight) {
+            weighted_support += weight;
+            total_nm += nm * weight;
+            total_mapq += mapq * weight;
+            aligned_bp += aln_bp;
+            clipped_bp += clip_bp;
+            positions.insert(start);
+            positions.insert(end);
+        }
+
+        double mean_nm() const { return (weighted_support == 0.0) ? 999.0 : (total_nm / weighted_support); }
+        double mean_mapq() const { return (weighted_support == 0.0) ? 0.0 : (total_mapq / weighted_support); }
+        double clipping_ratio() const {
+            long long denom = aligned_bp + clipped_bp;
+            return (denom == 0) ? 1.0 : static_cast<double>(clipped_bp) / denom;
+        }
+
+        double score(double mismatch_penalty, bool partial_sequencing) const {
+            double depth_component = std::log1p(weighted_support);
+            double mismatch_component = -(mean_nm() * mismatch_penalty);
+            double mapq_component = mean_mapq() / 60.0;
+            double clipping_component = -(clipping_ratio() * 10.0);
+            double breadth_component = partial_sequencing ? std::log1p(positions.size()) : (positions.size() / 1000.0);
+            return depth_component + mismatch_component + mapq_component + breadth_component + clipping_component;
+        }
+    };
+
+    inline std::string get_allele_group(const std::string& ref_name) {
+        static const std::regex group_regex(R"(\*(\d{5}))");
+        std::smatch match;
+        if (std::regex_search(ref_name, match, group_regex) && match.size() > 1) {
+            return match.str(1);
+        }
+        return ref_name;
+    }
+
+    inline void parse_cigar(const std::string& cigar_str, int& aln_bp, int& clip_bp) {
+        aln_bp = 0; clip_bp = 0;
+        if (cigar_str == "*") return;
+        static const std::regex cigar_regex(R"((\d+)([MIDNSHP=X]))");
+        auto words_begin = std::sregex_iterator(cigar_str.begin(), cigar_str.end(), cigar_regex);
+        auto words_end = std::sregex_iterator();
+        for (std::sregex_iterator i = words_begin; i != words_end; ++i) {
+            std::smatch match = *i;
+            int length = std::stoi(match.str(1));
+            char op = match.str(2)[0];
+            if (op == 'M' || op == '=' || op == 'X') aln_bp += length;
+            else if (op == 'S' || op == 'H') clip_bp += length;
+        }
+    }
+
+    inline int extract_nm_tag(const std::string& line) {
+        size_t pos = line.find("NM:i:");
+        if (pos != std::string::npos) {
+            size_t start = pos + 5;
+            size_t end = line.find('\t', start);
+            return std::stoi(line.substr(start, end - start));
+        }
+        return 0;
+    }
+
+    inline void flush_records(const std::vector<AlignmentRecord>& records, 
+                       std::unordered_map<std::string, RefStats>& ref_stats,
+                       std::unordered_map<std::string, std::vector<std::pair<std::string, int>>>& read_to_refs) {
+        if (records.empty()) return;
+        int best_nm = std::numeric_limits<int>::max();
+        for (const auto& r : records) { if (r.nm < best_nm) best_nm = r.nm; }
+
+        std::vector<AlignmentRecord> best_records;
+        for (const auto& r : records) { if (r.nm == best_nm) best_records.push_back(r); }
+
+        double weight = 1.0 / best_records.size();
+        for (const auto& r : best_records) {
+            // FIXED: Using .count() for universal standard compatibility
+            if (ref_stats.count(r.ref_name) == 0) ref_stats[r.ref_name] = RefStats(r.ref_name);
+            ref_stats[r.ref_name].add_alignment(r.nm, r.mapq, r.aln_bp, r.clip_bp, r.start, r.end, weight);
+            read_to_refs[r.read_name].push_back({r.ref_name, r.nm});
+        }
+    }
+
+    inline PairResult evaluate_pair(const std::pair<std::string, std::string>& pair,
+                            const std::unordered_map<std::string, std::vector<std::pair<std::string, int>>>& read_to_refs,
+                            const std::unordered_map<std::string, double>& ref_scores,
+                            double homozygous_bonus, double hetero_penalty) {
+        auto [a, b] = pair;
+        PairResult res; 
+        res.allele_pair = pair; // FIXED: assigned to allele_pair
+        double weighted_nm = 0;
+
+        for (const auto& [read_name, alignments] : read_to_refs) {
+            int best_nm = std::numeric_limits<int>::max();
+            for (const auto& aln : alignments) { if (aln.second < best_nm) best_nm = aln.second; }
+
+            bool has_a = false, has_b = false;
+            for (const auto& aln : alignments) {
+                if (aln.second == best_nm) {
+                    if (aln.first == a) has_a = true;
+                    if (aln.first == b) has_b = true;
+                }
+            }
+            if (has_a || has_b) { res.pair_reads++; weighted_nm += best_nm; }
+            if (has_a && has_b) res.shared++;
+            else if (has_a) res.unique_a++;
+            else if (has_b) res.unique_b++;
+        }
+
+        if (res.pair_reads == 0) return res;
+        res.mean_nm = weighted_nm / res.pair_reads;
+        res.score = res.pair_reads - (res.mean_nm * 10.0) + ref_scores.at(a) + ref_scores.at(b);
+
+        if (a == b) {
+            res.score += homozygous_bonus;
+        } else {
+            int minor_support = std::min(res.unique_a, res.unique_b);
+            if (res.shared > 0) {
+                if ((static_cast<double>(minor_support) / res.shared) < 0.05) res.score -= hetero_penalty;
+            }
+            res.score -= std::abs(res.unique_a - res.unique_b) * 0.02;
+        }
+        return res;
+    }
+}
+
+PairResult select_allele_pair(const std::string& bam_path,
+                              int top_candidates = 25,
+                              double mismatch_penalty = 6.0,
+                              bool partial_sequencing = false,
+                              double homozygous_bonus = 25.0,
+                              double hetero_penalty = 50.0) {
+    
+    std::unordered_map<std::string, AlleleSelectorInternal::RefStats> ref_stats;
+    std::unordered_map<std::string, double> ref_scores;
+    std::unordered_map<std::string, std::vector<std::pair<std::string, int>>> read_to_refs;
+
+    std::string command = v_samtools + " view -h " + bam_path;
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
+    if (!pipe) {
+        throw std::runtime_error("Runtime Error: Failed to execute samtools pipeline.");
+    }
+
+    char buffer[4096];
+    std::string line_remainder = "";
+    std::string current_read = "";
+    std::vector<AlleleSelectorInternal::AlignmentRecord> current_records;
+
+    while (fgets(buffer, sizeof(buffer), pipe.get()) != nullptr) {
+        line_remainder += buffer;
+        size_t pos;
+        while ((pos = line_remainder.find('\n')) != std::string::npos) {
+            std::string line = line_remainder.substr(0, pos);
+            line_remainder = line_remainder.substr(pos + 1);
+
+            if (line.empty() || line[0] == '@') continue;
+
+            std::stringstream ss(line);
+            std::string qname, flag_str, rname, pos_str, mapq_str, cigar;
+            std::getline(ss, qname, '\t'); std::getline(ss, flag_str, '\t');
+            std::getline(ss, rname, '\t'); std::getline(ss, pos_str, '\t');
+            std::getline(ss, mapq_str, '\t'); std::getline(ss, cigar, '\t');
+
+            if (std::stoi(flag_str) & 4) continue;
+
+            AlleleSelectorInternal::AlignmentRecord record;
+            record.read_name = qname;
+            record.ref_name = rname;
+            record.nm = AlleleSelectorInternal::extract_nm_tag(line);
+            record.mapq = std::stoi(mapq_str);
+            record.start = std::stoi(pos_str);
+            AlleleSelectorInternal::parse_cigar(cigar, record.aln_bp, record.clip_bp);
+            record.end = record.start + record.aln_bp;
+
+            if (current_read.empty()) current_read = qname;
+            if (qname != current_read) {
+                AlleleSelectorInternal::flush_records(current_records, ref_stats, read_to_refs);
+                current_records.clear();
+                current_read = qname;
+            }
+            current_records.push_back(record);
+        }
+    }
+    AlleleSelectorInternal::flush_records(current_records, ref_stats, read_to_refs);
+
+    for (const auto& [ref, stats] : ref_stats) {
+        ref_scores[ref] = stats.score(mismatch_penalty, partial_sequencing);
+    }
+
+    std::vector<std::pair<std::string, double>> sorted_refs(ref_scores.begin(), ref_scores.end());
+    std::sort(sorted_refs.begin(), sorted_refs.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+
+    std::unordered_map<std::string, std::pair<std::string, double>> group_best;
+    for (const auto& [ref, score] : sorted_refs) {
+        std::string grp = AlleleSelectorInternal::get_allele_group(ref);
+        if (group_best.count(grp) == 0) group_best[grp] = {ref, score};
+    }
+
+    std::vector<std::pair<std::string, double>> candidate_pool;
+    for (const auto& [grp, val] : group_best) candidate_pool.push_back(val);
+    std::sort(candidate_pool.begin(), candidate_pool.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+
+    std::vector<std::string> candidates;
+    for (int i = 0; i < std::min(top_candidates, static_cast<int>(candidate_pool.size())); ++i) {
+        candidates.push_back(candidate_pool[i].first);
+    }
+
+    std::vector<std::pair<std::string, std::string>> pairs;
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        for (size_t j = i; j < candidates.size(); ++j) {
+            pairs.push_back({candidates[i], candidates[j]});
+        }
+    }
+
+    std::vector<std::future<PairResult>> futures;
+    for (const auto& pair : pairs) {
+        futures.push_back(std::async(std::launch::async, AlleleSelectorInternal::evaluate_pair, pair, 
+                                     std::ref(read_to_refs), std::ref(ref_scores), 
+                                     homozygous_bonus, hetero_penalty));
+    }
+
+    PairResult best_pair;
+    double top_score = -999999.0;
+    for (auto& f : futures) {
+        PairResult res = f.get();
+        if (res.score > top_score) {
+            top_score = res.score;
+            best_pair = res;
+        }
+    }
+
+    return best_pair;
+}
+
 
 
 void read_sam_dna (int frame, string sam, string gene)
@@ -94,12 +423,10 @@ void read_sam_dna (int frame, string sam, string gene)
                 if (sequence_list_r1[key] > mm + 1)
                 {
                     sequence_list_r1[key] = mm + 1;
-//                    sequence_size_r1[sam_line[0]] = sam_line[9].size();
                 }
             }
             else {
                 sequence_list_r1[key] = mm + 1;
- //               sequence_size_r1[sam_line[0]] = sam_line[9].size();
             }
         }
         
@@ -109,12 +436,10 @@ void read_sam_dna (int frame, string sam, string gene)
                 if (sequence_list_r2[key] > mm +1)
                 {
                     sequence_list_r2[key] = mm +1;
-   //                 sequence_size_r2[sam_line[0]] = sam_line[9].size();
                 }
             }
             else {
                 sequence_list_r2[key] = mm +1;
-  //              sequence_size_r2[sam_line[0]] = sam_line[9].size();
             }
         }
         
@@ -185,36 +510,41 @@ void main_dna_map ()
         screen_message (screen_size, 0, v_message, 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);
         
-        v_message = "Usage:     kir-mapper map -r1 R1.gz -r2 R2.gz -sample sample_name <options>";
+        v_message = "Usage: ";
         screen_message (screen_size, 0, v_message, 1, v_quiet);
-        v_message = "Usage:     kir-mapper map -bam your.bam -sample sample_name <options>";
+        v_message = "  kir-mapper map -bam your.bam [-sample name] [-output dir] <options>";
+        screen_message (screen_size, 0, v_message, 1, v_quiet);
+        v_message = "  kir-mapper map -r1 R1.gz -r2 R2.gz [-sample name] [-output dir] <options>";
         screen_message (screen_size, 0, v_message, 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);
         
         screen_message (screen_size, 0, "Mandatory options:", 1, v_quiet);
         screen_message (screen_size, 2, "-bam         a BAM/CRAM file (ignore r0/r1/r2)", 1, v_quiet);
-        screen_message (screen_size, 2, "-r1          a paired-ended forward fastq (fq, fastq, or gz)", 1, v_quiet);
-        screen_message (screen_size, 2, "-r2          a paired-ended reverse fastq (fq, fastq, or gz)", 1, v_quiet);
-        screen_message (screen_size, 2, "-r0          a single-ended fastq (fq, fastq, or gz)", 1, v_quiet);
+        screen_message (screen_size, 0, "       or", 1, v_quiet);
+        screen_message (screen_size, 2, "-r1          forward FASTQ for paired-end reads (.fq, .fastq, .gz)", 1, v_quiet);
+        screen_message (screen_size, 2, "-r2          reverse FASTQ for paired-end reads (.fq, .fastq, .gz)", 1, v_quiet);
+        screen_message (screen_size, 0, "       or", 1, v_quiet);
+        screen_message (screen_size, 2, "-r0          FASTQ for single-end reads (.fq, .fastq, .gz)", 1, v_quiet);
         screen_message (screen_size, 2, "", 1, v_quiet);
-        
+
         screen_message (screen_size, 0, "Other options:", 1, v_quiet);
-        screen_message (screen_size, 2, "-sample      sample name [default: same as input file]", 1, v_quiet);
+        screen_message (screen_size, 2, "-sample      sample name [same as input file if not indicated]", 1, v_quiet);
         screen_message (screen_size, 2, "-db          path to the kir-mapper database", 1, v_quiet);
-        screen_message (screen_size, 2, "-output      output folder", 1, v_quiet);
+        screen_message (screen_size, 2, "-output      output folder [same as input file if not indicated]", 1, v_quiet);
         screen_message (screen_size, 2, "-threads     number of threads [" + v_threads + "]", 1, v_quiet);
         screen_message (screen_size, 2, "-buffer      number of sequences in buffer [" + to_string(v_buffer) + "]", 1, v_quiet);
-        screen_message (screen_size, 2, "-error       the threshold for nucleotide quality trimming [" + to_string(v_mtrim_error).substr(0,4) + "]", 1, v_quiet);
-        screen_message (screen_size, 2, "-tolerance   fraction of mismatches allowed [0.05 Illumina, 0.1 Nonapore]", 1, v_quiet);
-        screen_message (screen_size, 2, "-downsample  downsampling for adjustment [" + to_string(downsampling) + "]", 1, v_quiet);
-        screen_message (screen_size, 2, "-config      path to a kir-mapper configuration file", 1, v_quiet);
+        screen_message (screen_size, 2, "-error       error probability threshold for base quality trimming [" + to_string(v_mtrim_error).substr(0,4) + "]", 1, v_quiet);
+        screen_message (screen_size, 2, "-tolerance   fraction of mismatches allowed [0.05 Illumina, 0.1 Nanopore]", 1, v_quiet);
+        screen_message (screen_size, 2, "-downsample  read depth for downsampling when adjusting reads [" + to_string(downsampling) + "]", 1, v_quiet);
 
-        screen_message (screen_size, 2, "", 1, v_quiet);
+        screen_message (screen_size, 0, "", 1, v_quiet);
+        screen_message (screen_size, 0, "Flags:", 1, v_quiet);
         screen_message (screen_size, 2, "--skip-unmapped   skip retrieving unmapped reads [not recommended]", 1, v_quiet);
         screen_message (screen_size, 2, "--skip-adjust     skip the adjustment procedure [not recommended]", 1, v_quiet);
-        screen_message (screen_size, 2, "--low-mem         force low memory mode for sequence selection", 1, v_quiet);
-        screen_message (screen_size, 2, "--exome           this is an exome (only exons)", 1, v_quiet);
-        //screen_message (screen_size, 2, "--nanopore        this is nanopore data (must indicate -bam)", 1, v_quiet);
+        screen_message (screen_size, 2, "--skip-markdup    skip marking duplicates with Picard", 1, v_quiet);
+        screen_message (screen_size, 2, "--low-mem         enable low-memory mode for sequence selection", 1, v_quiet);
+        screen_message (screen_size, 2, "--exome           input is whole-exome sequencing data (exons only)", 1, v_quiet);
+        screen_message (screen_size, 2, "--nanopore        input is Nanopore data (requires -bam)", 1, v_quiet);
         //screen_message (screen_size, 2, "--rna             (beta) this is RNAseq data", 1, v_quiet);
         screen_message (screen_size, 2, "--quiet           quiet mode", 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);
@@ -423,12 +753,19 @@ void main_dna_map ()
 
     ifstream file_db(v_db_info.c_str());
     int db_version_ok = 0;
+    int db_engine_ok = 0;
+
     for( std::string line; getline( file_db, line ); )
     {
         if (line == "kir-mapper:1") {
             db_version_ok = 1;
             continue;
         }
+        if (line == "engine:1.1") {
+            db_engine_ok = 1;
+            continue;
+        }
+
         vector<string> db_data;
         boost::split(db_data,line,boost::is_any_of(":"));
         if (db_data[0] == "GENE")
@@ -451,15 +788,13 @@ void main_dna_map ()
     file_db.close();
     
     
-    if (db_version_ok == 0) {
+	if ((db_version_ok == 0) || (db_engine_ok == 0)){
         v_message = "This database is not compatible with this version of kir-mapper.";
         warnings.push_back (v_message);
         v_sample = "";
         v_r1 = "";
         main_dna_map();
-        return;
     }
-    
     
     if (v_bam != "")
     {
@@ -636,9 +971,9 @@ void main_dna_map ()
 	string selectcleanR1 = v_output + v_sample + "selected.trim.R1.fastq";
 	string selectcleanR2 = v_output + v_sample + "selected.trim.R2.fastq";
 	if (v_map_type == "single") {selectcleanR1 = v_output + v_sample + "selected.trim.R0.fastq";}
-	
 	if (v_nanopore == 1) {
 		v_map_type == "single";
+//		selectcleanR1 = v_output + v_sample + "selected.R0.fragmented.fastq";
 		selectcleanR1 = v_output + v_sample + "selected.R0.fastq";
 	}
 		
@@ -898,8 +1233,6 @@ void main_dna_map ()
                     vector <string> data;
                     boost::split(data,line,boost::is_any_of("\t"));
                     motifs[data[1]] = 0;
-//                    string rev = reverse_and_complement(data[1]);
-//                    motifs[rev] = 0;
                 }
                 file.close();
                 
@@ -1042,28 +1375,28 @@ void main_dna_map ()
 
         if ((locus_depth["KIR3DL3"] < 20) && (v_exome == 0))
         {
-            v_message = " > Warning: low depth, about " + to_string(int(locus_depth["KIR3DL3"])) + " for KIR3DL3";
+            v_message = " > Warning: low read depth, about " + to_string(int(locus_depth["KIR3DL3"])) + " for KIR3DL3";
             screen_message (screen_size, 0, v_message, 1, 0);
 			general_log << v_message << endl;
 		
-            v_message = " > Warning: minimum recommended is 20 for WGS";
+            v_message = " > Warning: minimum recommended is 30X for WGS";
             screen_message (screen_size, 0, v_message, 1, 0);
 			
-			v_message = " > Warning: Results might be biased due to low depth";
+			v_message = " > Warning: Results might be biased due to low read depth";
 			screen_message (screen_size, 0, v_message, 1, 0);
 			general_log << v_message << endl;
         }
 		
 		if ((locus_depth["KIR3DL3"] < 50) && (v_exome == 1))
         {
-            v_message = " > Warning: low depth, about " + to_string(int(locus_depth["KIR3DL3"])) + " for KIR3DL3";
+            v_message = " > Warning: low read depth, about " + to_string(int(locus_depth["KIR3DL3"])) + " for KIR3DL3";
             screen_message (screen_size, 0, v_message, 1, 0);
 			general_log << v_message << endl;
 		
-            v_message = " > Warning: minimum recommended is 50 for Exomes";
+            v_message = " > Warning: minimum recommended is 50X for Exomes";
             screen_message (screen_size, 0, v_message, 1, 0);
 			
-			v_message = " > Warning: Results might be biased due to low depth";
+			v_message = " > Warning: Results might be biased due to low read depth";
 			screen_message (screen_size, 0, v_message, 1, 0);
 			general_log << v_message << endl;
         }
@@ -1123,7 +1456,7 @@ void main_dna_map ()
 			}
 			screen_message (screen_size, 0, "Scoring sequences for " + *i + " ...", 2, v_quiet);
 			
-			string v_ref = "'" + v_db + "/mapper/dna-nanopore/select/" + *i + "/" + *i + ".fas' "; 
+			string v_ref = "'" + v_db + "/genotype/fasta/" + *i + ".fasta' "; 
 			boost::replace_all(v_ref, "\\ ", " ");
 			string v_r0_sort = v_output + v_sample + "sorted_" + *i + "_R0.fastq";
 
@@ -1242,7 +1575,7 @@ void main_dna_map ()
 				
 				pair <string,string> key = make_pair (newreadname,*i);
 				
-				long_score[key] = nmint;
+				long_score[key] = int(ratio * 1000);
 				long_size[newreadname] = size;
 				debug_message("writing fastq tmp end ");
 			}
@@ -1255,6 +1588,11 @@ void main_dna_map ()
 			{
 				if (*j ==  "") {continue;}
 				if (*j ==  *i) {continue;}
+				string geneA = *i;
+				string geneB = *j;
+
+
+				if (geneA.substr(0,1) != geneB.substr(0,1)) {continue;}
 				
 				if (v_rna == 0) {
 					if (locus_presence.find(*j) != locus_presence.end())
@@ -1263,13 +1601,14 @@ void main_dna_map ()
 					}
 				}
 				
-				string v_ref = "'" + v_db + "/mapper/dna-nanopore/score/" + *j + "/" + *j + ".fas' "; 
+				string v_ref = "'" + v_db + "/genotype/fasta/" + *j + ".fasta' "; 
 				boost::replace_all(v_ref, "\\ ", " ");
 			
 				string outsamtmp =  v_output + v_sample + *i + "." + *j + ".tmp.sam";
 				v_command = v_minimap + " -a -t " + v_threads + " -x map-ont -o " + outsamtmp + " " + v_ref + " " + outfqtmp;
 				debug_message(v_command);
 				string data = GetStdoutFromCommand(v_command.c_str());
+
 				
 				
 				ifstream SAMSEC( outsamtmp.c_str());
@@ -1292,6 +1631,8 @@ void main_dna_map ()
 					string read = fields[0];
 					string nm = fields[11];
 					string cigar = fields[5];
+					string seq = fields[9];
+
 				
 					boost::replace_all(cigar, "S", ",S;");
 					boost::replace_all(cigar, "H", ",H;");
@@ -1323,17 +1664,23 @@ void main_dna_map ()
 						if ((sub[1] == "H") && (lowerH == 0))	{lowerH = stoi(sub[0]);continue;}
 					}
 					debug_message("Finding coordinates end");
-					
+
+					int cutupper = upperH + upperS;
+					int cutlower = lowerH + lowerS;
+					int size = seq.length() - (cutupper + cutlower);
+
 					
 					std::size_t found = nm.find("NM:");
 					if (found==std::string::npos) {continue;}
 					boost::replace_all(nm, "NM:i:", "");
 					debug_message("Testing NM start");
 					int nmint = stoi(nm);
-					nmint = nmint + upperH + upperS + lowerS + lowerH;
+					float ratio = float(nmint) / float(size);
+					if (ratio > v_tolerance) {continue;}
+
 			
 					pair <string,string> key1 = make_pair (read,*j);
-					long_score[key1] = nmint;
+					long_score[key1] = int(ratio * 1000);
 				}
 				SAMSEC.close();
 				removefile(outsamtmp,v_debug);
@@ -1369,6 +1716,7 @@ void main_dna_map ()
 				string read = fields[0];
 				string nm = fields[11];
 				string cigar = fields[5];
+				string seq = fields[9];
 			
 				boost::replace_all(cigar, "S", ",S;");
 				boost::replace_all(cigar, "H", ",H;");
@@ -1401,38 +1749,26 @@ void main_dna_map ()
 				}
 				debug_message("Finding coordinates end");
 				
+				int cutupper = upperH + upperS;
+				int cutlower = lowerH + lowerS;
+				int size = seq.length() - (cutupper + cutlower);
 				
 				std::size_t found = nm.find("NM:");
 				if (found==std::string::npos) {continue;}
 				boost::replace_all(nm, "NM:i:", "");
 				debug_message("Testing NM start");
 				int nmint = stoi(nm);
-				nmint = nmint + upperH + upperS + lowerS + lowerH;
+				float ratio = float(nmint) / float(size);
+				if (ratio > v_tolerance) {continue;}
+
 		
 				pair <string,string> key1 = make_pair (read,"others");
-				long_score[key1] = nmint;
+				long_score[key1] = int(ratio * 1000);
 			}
 			SAMSEC.close();
 			removefile(outsamtmp,v_debug);
 			
-			
-			
-			
-			
-			
-			
-			
 		}
-		/*
-		string testfile = v_output + v_sample + ".testelist.txt";
-		ofstream test;
-		test.open (testfile.c_str());
-		for (auto item : long_score)
-		{
-			test << item.first.first << "\t" << item.first.second << "\t" << item.second << endl;
-		}
-		test.close();
-		*/
     
 	}
 	
@@ -2177,13 +2513,7 @@ void main_dna_map ()
 			}
 		}
 		
-	/*    
-		original_data_r2.clear();
-		original_data_r1.clear();
-		original_data_r1_trim.clear();
-		original_data_r2_trim.clear();
-	*/
-	   
+   
 		v_message = "Making fastq files: done";
 		screen_message (screen_size, 0, v_message, 1, v_quiet);
 	}
@@ -2203,118 +2533,211 @@ void main_dna_map ()
     
     //Adjustments
     
-    
-    int mincov = 0;
-    for( std::vector<string>::const_iterator i = v_gene_list.begin(); i != v_gene_list.end(); ++i)
-    {
-        if (*i == "KIR2DL4") {mincov = 5;}
-    }
 
-    map <string,string> typing_result_alleleA;
+	if (v_rna == 1) {v_skiptyping = 1;}
+	if (v_nanopore == 1) {v_skiptyping = 1;}
+
+	map <string,string> typing_result_alleleA;
     map <string,string> typing_result_alleleB;
 
-    
-    if (v_rna == 1) {v_skiptyping = 1;}
+	if (v_skiptyping == 0){
 
-    
-    if (v_skiptyping == 0) {
-        v_message = "Performing adjustments ...";
+		v_message = "Performing adjustments ...";
         screen_message (screen_size, 0, v_message, 2, v_quiet);
+
+        map <string,int> max_mismatch;
+        max_mismatch["KIR2DL1"] = 1;
+        max_mismatch["KIR2DL2"] = 0;
+        max_mismatch["KIR2DL3"] = 0;
+        max_mismatch["KIR2DL4"] = 1;
+        max_mismatch["KIR2DL5AB"] = 1;
+        max_mismatch["KIR2DP1"] = 1;
+        max_mismatch["KIR2DS1"] = 0;
+        max_mismatch["KIR2DS2"] = 0;
+        max_mismatch["KIR2DS3"] = 0;
+        max_mismatch["KIR2DS4"] = 0;
+        max_mismatch["KIR2DS5"] = 0;
+        max_mismatch["KIR3DL1"] = 0;
+        max_mismatch["KIR3DL2"] = 1;
+        max_mismatch["KIR3DL3"] = 1;
+        max_mismatch["KIR3DS1"] = 0;
+
         string v_tag_sub = v_sample.substr(0, v_sample.size()-1);
         
         string cmd = "mkdir " + v_output + "/adjustment/";
         GetStdoutFromCommand(cmd.c_str());
-        
-        ThreadPool adj(stoi(v_threads));
-        std::vector< std::future<int> > results_adj;
-        
-        map <string,string> typing_result_alleleA;
-        map <string,string> typing_result_alleleB;
-        vector <string> gen_log;
-        int count = 0;
-        
-        for( std::vector<string>::const_iterator i = v_gene_list.begin(); i != v_gene_list.end(); ++i)
-        {
-            if (*i == "") {continue;}
-            
-            if (gene_type.find(*i) != gene_type.end()) {
+
+		for( std::vector<string>::const_iterator i = v_gene_list.begin(); i != v_gene_list.end(); ++i)
+		{
+
+			if (*i == "") {continue;}
+
+			if (gene_type.find(*i) != gene_type.end()) {
                 if (gene_type[*i]  != "TYPE") {continue;}
             }
-            
+
             if (locus_presence.find(*i) != locus_presence.end())
             {
                 if (locus_presence[*i] == 0) {continue;}
             }
             string gene = *i;
-            
-            v_message = "Adjusting " + *i + " ...";
+
+			v_message = "Adjusting " + gene + " ...";
             screen_message (screen_size, 0, v_message, 2, v_quiet);
 
-            
-            if (v_typeall == 0)
+			if (v_typeall == 0)
             {
                 if (gene_type[gene] != "TYPE")
                 {
-                    gen_log.push_back(gene + ": alleles used for adjustments - disabled");
                     continue;
                 }
             }
 
+            string cmd = "mkdir " + v_output + "/adjustment/" + gene;
+            GetStdoutFromCommand(cmd.c_str());
+            string outadj = v_output + "/adjustment/" + gene;
+
+
+
+            string reffas = v_db + "/genotype/fasta/" + gene + ".fasta";
+            map <string,string> seqdata;
+            ifstream reference (reffas.c_str());
+			string id = "";
+            for( std::string line; getline( reference, line ); )
+			{
+				if (line == "") {continue;}
+                if (line.substr(0,1) == ">") {
+                    id = line.substr(1);
+                    vector <string> data;
+                    boost::split(data,id,boost::is_any_of(" "));
+                    id = data[0];
+                    continue;
+                }
+                seqdata[id].append(line);
+            }
+            reference.close();
+
+
+			string fq1 = "";
+			string fq2 = "";
+			if (v_map_type == "paired")
+			{
+				fq1 = v_output + v_sample + gene + "_R1.fastq";
+				fq2 = v_output + v_sample + gene + "_R2.fastq";
+			}
+			if (v_map_type == "single")
+			{
+				fq1 = v_output + v_sample + gene + "_R0.fastq";
+				fq2 = "";
+			}
+			
+			
+			string outsam = outadj + "/" + gene + ".sam";
+			string outbam = outadj + "/" + gene + ".bam";
+			cmd = v_bwa + " mem -t " + v_threads + " -B 6 -a -o " + outsam + " " + reffas + " " + fq1 + " " + fq2;
+            GetStdoutFromCommand(cmd);
+ 
+            cmd = v_samtools + " sort -@ " + v_threads + " -o " + outbam + " " + outsam;
+			GetStdoutFromCommand(cmd);
+ 
+            cmd = v_samtools + " index -@ " + v_threads + " " + outbam;
+			GetStdoutFromCommand(cmd);
+ 
+            removefile(outsam,v_debug);
+  
+
             
-                string cmd = "mkdir " + v_output + "/adjustment/" + gene;
-                GetStdoutFromCommand(cmd.c_str());
-                
-                string outadj = v_output + "/adjustment/" + gene;
-                
-                string fq1 = "";
-                string fq2 = "";
-                if (v_map_type == "paired")
+            PairResult result;
+            if (v_exome == 1) {result = select_allele_pair(outbam, 20, 6.0, true);}
+            if (v_exome == 0) {result = select_allele_pair(outbam, 20, 6.0, false);}
+
+            map <string,int> track_read_nm;
+
+            if (result.allele_pair.first != "")
+            {
+                string fasout =  outadj + "/" + gene + ".reference.fas";
+                ofstream out;
+			    out.open (fasout.c_str());
+                out << ">" << result.allele_pair.first << endl;
+                out << seqdata[result.allele_pair.first] << endl;
+                if (result.allele_pair.second != result.allele_pair.first)
                 {
-                    fq1 = v_output + v_sample + gene + "_R1.fastq";
-                    fq2 = v_output + v_sample + gene + "_R2.fastq";
+                    out << ">" << result.allele_pair.second << endl;
+                    out << seqdata[result.allele_pair.second] << endl;
                 }
-                if (v_map_type == "single")
+                out.close();
+
+                cmd = v_bwa + " index " + fasout;
+                GetStdoutFromCommand(cmd);
+
+                string samoutA = outadj + "/" + gene + ".reference.forward.sam";
+                string samoutB = outadj + "/" + gene + ".reference.reverse.sam";
+                cmd = v_bwa + " mem -o " + samoutA + " " + fasout + " " + fq1;
+                GetStdoutFromCommand(cmd);
+                ifstream samA (samoutA.c_str());
+                for( std::string line; getline( samA, line ); )
                 {
-                    fq1 = v_output + v_sample + gene + "_R0.fastq";
-                    fq2 = "";
+                    if (line == "") {continue;}
+                    vector <string> data;
+                    boost::split(data,line,boost::is_any_of("\t"));
+                    for (auto item : data)
+                    {
+                        if (item.substr(0,4) == "NM:i:0")
+                        {
+                            string nm = item.substr(5);
+                            int nmi = stoi(nm);
+                            track_read_nm[data[0]] = nmi;
+                        }
+                    }
                 }
+                samA.close();
+                removefile(samoutA,v_debug);
                 
 
-            string adjtype = "cds";
-            if (v_exome == 0){adjtype = "full";}
-            string alleles_adjustment = adjust_freeb(gene,fq1,fq2,outadj, v_threads,adjtype,v_db);
-            
-            if (alleles_adjustment.find("ailed") != string::npos)
-            {
-                gen_log.push_back( gene + ": alleles used for adjustments - failed");
-                typing_result_alleleA[gene] = "";
-                typing_result_alleleB[gene] = "";
-                continue;
+
+                if (fq2 != "")
+                {
+                    cmd = v_bwa + " mem -o " + samoutB + " " + fasout + " " + fq2;
+                    GetStdoutFromCommand(cmd);
+
+                ifstream samB (samoutB.c_str());
+                for( std::string line; getline( samB, line ); )
+                {
+                    if (line == "") {continue;}
+                        vector <string> data;
+                        boost::split(data,line,boost::is_any_of("\t"));
+                        for (auto item : data)
+                        {
+                            if (item.substr(0,4) == "NM:i:0")
+                            {
+                                string nm = item.substr(5);
+                                int nmi = stoi(nm);
+                                track_read_nm[data[0]] = track_read_nm[data[0]] + nmi;
+                            }
+                        }
+                    }
+                    samB.close();
+                    removefile(samoutB,v_debug);
+                }
+
+                
+                for (auto item : track_read_nm) {
+                    int max = max_mismatch[gene];
+                    if (item.second <= max) {
+                        pair <string,string> key = make_pair(gene,item.first);
+                        reads_possibly_mapped[key] = item.second;
+                    }
+                }
             }
-                
-                vector <string> alleles;
-                boost::split(alleles,alleles_adjustment,boost::is_any_of("\t"));
-                
-                typing_result_alleleA[gene] = alleles[0];
-                typing_result_alleleB[gene] = alleles[1];
-                gen_log.push_back( gene + ": alleles used for adjustments: " + alleles[0] + " and " + alleles[1]);
-                
-                count++;
-                continue;
-            
-        }
-        
-        for (auto item : gen_log)
-        {
-            general_log << item << endl;
-        }
-        
-        v_message = "Performing adjustments: done";
-        screen_message (screen_size, 0, v_message, 1, v_quiet);
-        
-    }
+
+
+		}
+	}
+    v_message = "Performing adjustments: done";
+    screen_message (screen_size, 0, v_message, 1, v_quiet);
 
     
+
     for (auto & item : reads_possibly_mapped)
     {
         string gene = item.first.first;
@@ -2350,17 +2773,17 @@ void main_dna_map ()
 
 
 
-
     
     
     // Final mapping
-	 if (v_nanopore == 1) {
-	
+
+
+   if (v_nanopore == 1) {
 		for( std::vector<string>::const_iterator i = v_gene_list.begin(); i != v_gene_list.end(); ++i)
 		{
 			
 			if (*i == "") {continue;}
-	
+
 			v_message = "Mapping " + *i + " ...";
 			screen_message (screen_size, 0, v_message, 2, v_quiet);
 			
@@ -2372,19 +2795,14 @@ void main_dna_map ()
 			string in = v_output + v_sample + *i + "_R0.fastq";
 			string v_sam1 = v_output + v_sample + *i + ".tmp.sam";
 			string v_sam2 = v_output + v_sample + *i + ".unique.sam";
+			string v_sam3 = v_output + v_sample + *i + ".adjusted.sam";
 			string v_log = v_output + "log/" + v_sample + *i + ".map.log";
-			
+				 
 			string readgroup = "'@RG\\tID:" + v_sample_sub + "\\tSM:" + v_sample_sub + "'";
-			
 			v_command = v_minimap + " -a -t " + v_threads + " -x map-ont -A 1 -B 2 -O 2,12 -R " + readgroup + " -o " + v_sam1 + " " + v_reference + " " + in;
 			string out = GetStdoutFromCommand (v_command.c_str());
 			
-			ofstream logmap;
-			logmap.open (v_log.c_str());
-			logmap << out << endl;
-			logmap.close();
-			
-			
+
 			ifstream reference (v_reference.c_str());
 			string refseq = "";
 			for( std::string line; getline( reference, line ); )
@@ -2396,16 +2814,21 @@ void main_dna_map ()
 			reference.close();
 			ref_size[*i] = refseq.length();
 			refseq = "";
-			
+				 
 				 
 			fstream sam (v_sam1.c_str());
+		
 			ofstream OUT1;
 			OUT1.open (v_sam2.c_str());
+			ofstream OUT2;
+			OUT2.open (v_sam3.c_str());
 		
 				 
 			int count_reads = 0;
 			int v_pos_correct = position_hg38[*i] - 1;
-			
+			unordered_map <string,int> adjusted_for_secondary;
+			unordered_map <string,int> adjusted_for_primary;
+				 
 			for( std::string line; getline( sam, line ); )
 			{
 				if (line == "") {continue;}
@@ -2429,13 +2852,34 @@ void main_dna_map ()
 					}
 
 					OUT1 << "@CO\tkir-mapper " << Program_version << ", human genome version hg38 " << endl;
+					
+					if (usechr == 0) {
+						OUT2 << "@SQ\tSN:" << chr_hg38[*i] << "\tLN:" << chr_size_hg38[*i] << endl;
+					}
+					if (usechr == 1) {
+						size_t found = chr_hg38[*i].find("chr");
+						if (found==std::string::npos){OUT2 << "@SQ\tSN:" << "chr" << chr_hg38[*i] << "\tLN:" << chr_size_hg38[*i] << endl;}
+						else {OUT2 << "@SQ\tSN:" << chr_hg38[*i] << "\tLN:" << chr_size_hg38[*i] << endl;}
+					}
+					OUT2 << "@CO\tkir-mapper " << Program_version << ", human genome version hg38 " << endl;
 					continue;
 				}
 				 
 				if ((sam_line[0].substr(0,1) == "@") || (sam_line[2] == "*"))
 				{
 					OUT1 << line << endl;
+					OUT2 << line << endl;
 					continue;
+				}
+
+
+				int nmref = getMismatchesFromSAM(line);
+				int sequence_size = getAlignedLengthFromSAM(line);
+				float divergence = float(nmref) / float(sequence_size);
+				if (divergence > maxdiv) {
+					int flag = stoi(sam_line[1]);
+					flag = flag + 256;
+					sam_line[1] = to_string(flag);
 				}
 
 
@@ -2453,36 +2897,163 @@ void main_dna_map ()
 				vector<string> address_multi_hits;
 				boost::split(address_multi_hits,tmp,boost::is_any_of(","));
 				 
-				OUT1 << sam_line[0] << "\t" << sam_line[1] << "\t" << sam_line[2] << "\t";
-				OUT1 << (stoi(sam_line[3]) + v_pos_correct) << "\t";
-				OUT1 << sam_line[4] << "\t" << sam_line[5] << "\t" << sam_line[6] << "\t";
-				OUT1 << (stoi(sam_line[7]) + v_pos_correct);
-				for (int helper = 8; helper < sam_line.size(); helper++)
-				{OUT1 << "\t" << sam_line[helper];}
-				OUT1 << endl;
-				count_reads++;
-				continue;
+
+
+
+				if (address_multi_hits.size() < 4)
+				{
+					
+					
+					OUT1 << sam_line[0] << "\t" << sam_line[1] << "\t" << sam_line[2] << "\t";
+					OUT1 << (stoi(sam_line[3]) + v_pos_correct) << "\t";
+					OUT1 << sam_line[4] << "\t" << sam_line[5] << "\t" << sam_line[6] << "\t";
+					OUT1 << (stoi(sam_line[7]) + v_pos_correct);
+					for (int helper = 8; helper < sam_line.size(); helper++)
+					{OUT1 << "\t" << sam_line[helper];}
+					OUT1 << endl;
+					OUT2 << sam_line[0] << "\t" << sam_line[1] << "\t" << sam_line[2] << "\t";
+					OUT2 << (stoi(sam_line[3]) + v_pos_correct) << "\t";
+					OUT2 << sam_line[4] << "\t" << sam_line[5] << "\t" << sam_line[6] << "\t";
+					OUT2 << (stoi(sam_line[7]) + v_pos_correct);
+					for (int helper = 8; helper < sam_line.size(); helper++)
+					{OUT2 << "\t" << sam_line[helper];}
+					OUT2 << endl;
+					count_reads++;
+					continue;
+				}
+		
+				
+				if (address_multi_hits.size() >= 4)
+				{
+					int adjust = 0;
+
+					pair <string,string> key = make_pair(*i,sam_line[0]);
+					if (reads_mapped_gene.find(sam_line[0]) != reads_mapped_gene.end())
+					{
+						
+						if (reads_mapped_gene[sam_line[0]].find(*i) != std::string::npos)
+						{
+							vector <string> sub;
+							string subtext = reads_mapped_gene[sam_line[0]].substr(1);
+							boost::split(sub,subtext,boost::is_any_of(";"));
+							int v1 = rand() % sub.size();
+							if (sub[v1] == *i) {
+								adjust = 1;
+							}
+						}
+						if (reads_mapped_gene[sam_line[0]] == *i)
+						{
+							adjust = 1;
+						}
+					}
+
+					if (adjust == 1) {
+							OUT2 << sam_line[0] << "\t" << sam_line[1] << "\t" << sam_line[2] << "\t";
+							OUT2 << (stoi(sam_line[3]) + v_pos_correct) << "\t";
+							OUT2 << sam_line[4] << "\t" << sam_line[5] << "\t" << sam_line[6] << "\t";
+							OUT2 << (stoi(sam_line[7]) + v_pos_correct);
+							for (int helper = 8; helper < sam_line.size(); helper++)
+							{OUT2 << "\t" << sam_line[helper];}
+							OUT2 << endl;
+							count_reads++;
+							adjusted_for_primary[sam_line[0]] = 1;
+					}
+						 
+						// for paired
+						if (sam_line[1] == "163") {sam_line[1] = "419";}
+						if (sam_line[1] == "83") {sam_line[1] = "339";}
+						if (sam_line[1] == "99") {sam_line[1] = "355";}
+						if (sam_line[1] == "147") {sam_line[1] = "403";}
+						if (sam_line[1] == "81") {sam_line[1] = "337";}
+						if (sam_line[1] == "167") {sam_line[1] = "423";}
+						if (sam_line[1] == "145") {sam_line[1] = "401";}
+						if (sam_line[1] == "97") {sam_line[1] = "353";}
+						if (sam_line[1] == "185") {sam_line[1] = "441";}
+						if (sam_line[1] == "73") {sam_line[1] = "329";}
+						if (sam_line[1] == "113") {sam_line[1] = "369";}
+						if (sam_line[1] == "117") {sam_line[1] = "373";}
+						if (sam_line[1] == "121") {sam_line[1] = "377";}
+						if (sam_line[1] == "133") {sam_line[1] = "389";}
+						if (sam_line[1] == "137") {sam_line[1] = "393";}
+						if (sam_line[1] == "177") {sam_line[1] = "433";}
+						if (sam_line[1] == "181") {sam_line[1] = "437";}
+						if (sam_line[1] == "161") {sam_line[1] = "417";}
+
+						// for single
+						if (sam_line[1] == "16") {sam_line[1] = "272";}
+						if (sam_line[1] == "0") {sam_line[1] = "256";}
+
+						 
+						adjusted_for_secondary[sam_line[0]] = 1;
+						 
+						OUT1 << sam_line[0] << "\t" << sam_line[1] << "\t" << sam_line[2] << "\t";
+						OUT1 << (stoi(sam_line[3]) + v_pos_correct) << "\t";
+						OUT1 << sam_line[4] << "\t" << sam_line[5] << "\t" << sam_line[6] << "\t";
+						OUT1 << (stoi(sam_line[7]) + v_pos_correct);
+						for (int helper = 8; helper < sam_line.size(); helper++)
+						{OUT1 << "\t" << sam_line[helper];}
+						OUT1 << endl;
+						 
+						if (adjust == 0) {
+							   OUT2 << sam_line[0] << "\t" << sam_line[1] << "\t" << sam_line[2] << "\t";
+							   OUT2 << (stoi(sam_line[3]) + v_pos_correct) << "\t";
+							   OUT2 << sam_line[4] << "\t" << sam_line[5] << "\t" << sam_line[6] << "\t";
+							   OUT2 << (stoi(sam_line[7]) + v_pos_correct);
+							   for (int helper = 8; helper < sam_line.size(); helper++)
+							   {OUT2 << "\t" << sam_line[helper];}
+							   OUT2 << endl;
+						   }
+					 
+				}
 			}
-			sam.close();
-			OUT1.close();
+				sam.close();
+				OUT1.close();
+				OUT2.close();
+
+				string log = v_output + v_sample + *i + ".log";
+				ofstream log_mapping;
+				log_mapping.open (log.c_str());
+
+				log_mapping << endl << "List of reads marked as secondary" << endl;
+				for (auto & item : adjusted_for_secondary)
+				{
+					 log_mapping << item.first << endl;
+				}
+				log_mapping << endl << endl;
+				
+				if (typing_result_alleleA[*i] != "") {
+					log_mapping << *i << ": alleles considered for adjustments: " << typing_result_alleleA[*i] << ", " << typing_result_alleleB[*i] << endl;
+				}
+			
+				log_mapping << endl;
+				log_mapping << "List of reads adjusted for primary:" << endl;
+				for (auto & item : adjusted_for_primary)
+				{
+					 log_mapping << item.first << endl;
+				}
+				log_mapping << endl;
+				 
+				 
+				log_mapping << "Number of mapped reads (only primary mappings): " << to_string(count_reads) << endl;
+				read_count_gene[*i] = double(count_reads);
+				 
+				log_mapping.close();
+			
 		}
 		v_message = "Mapping: done";
 		screen_message (screen_size, 0, v_message, 1, v_quiet);
-	 }
-	 
-	 
+	}
+    
+    
+
+
 	
     if (v_nanopore == 0) {
 		for( std::vector<string>::const_iterator i = v_gene_list.begin(); i != v_gene_list.end(); ++i)
 		{
 			
 			if (*i == "") {continue;}
-	/*
-			if (locus_presence.find(*i) != locus_presence.end())
-			{
-				if (locus_presence[*i] == 0) {continue;}
-			}
-	*/
+
 			v_message = "Mapping " + *i + " ...";
 			screen_message (screen_size, 0, v_message, 2, v_quiet);
 			
@@ -2801,7 +3372,7 @@ void main_dna_map ()
     screen_message (screen_size, 0, v_message, 2, v_quiet);
 
     thread t1 ([&sq_data,&optimized_reads,&adjusted_data,&rg_data]{
-		if (v_nanopore == 1) {return;}
+
         for( std::vector<string>::const_iterator i = v_gene_list.begin(); i != v_gene_list.end(); ++i)
         {
             if (*i ==  "") {continue;}
@@ -2822,16 +3393,15 @@ void main_dna_map ()
                 if (v_map_type != "single") {
                     if ((data[8] == "0") || (data[6] == "*")) {continue;}
                 }
-//                if (usechr == 1)
-//                {
-                    if (data[2] == "6") {data[2] = "chr6";}
-                    if (data[2] == "19") {data[2] = "chr19";}
-                    line = data[0];
-                    for (int a = 1; a < data.size(); a++)
-                    {
-                        line.append("\t" + data[a]);
-                    }
- //               }
+
+				if (data[2] == "6") {data[2] = "chr6";}
+				if (data[2] == "19") {data[2] = "chr19";}
+				line = data[0];
+				for (int a = 1; a < data.size(); a++)
+				{
+					line.append("\t" + data[a]);
+				}
+
                 
                 mtxg.lock();
                 optimized_reads[data[0]] = 1;
@@ -2866,16 +3436,15 @@ void main_dna_map ()
                 if (v_map_type != "single") {
                     if ((data[8] == "0") || (data[6] == "*")) {continue;}
                 }
-//                if (usechr == 1)
-//                {
-                    if (data[2] == "6") {data[2] = "chr6";}
-                    if (data[2] == "19") {data[2] = "chr19";}
-                    line = data[0];
-                    for (int a = 1; a < data.size(); a++)
-                    {
-                        line.append("\t" + data[a]);
-                    }
-//                }
+
+				if (data[2] == "6") {data[2] = "chr6";}
+				if (data[2] == "19") {data[2] = "chr19";}
+				line = data[0];
+				for (int a = 1; a < data.size(); a++)
+				{
+					line.append("\t" + data[a]);
+				}
+
                 
                 mtxg.lock();
                 optimized_reads[data[0]] = 1;
@@ -2893,7 +3462,7 @@ void main_dna_map ()
  
     
     
-    if ((v_bam != "") && (v_rna == 0))
+    if (((v_bam != "") && (v_rna == 0)) && (v_nanopore == 0))
     {
         general_log << endl << "Reads forced to MQ=0 after optimization:" << endl;
         v_message = "Merging files ... reading original alignments ...";
@@ -2922,8 +3491,6 @@ void main_dna_map ()
             vector <string> data;
             boost::split(data,line,boost::is_any_of("\t"));
 
-            
- 
             
             if (data[1] == "*") {continue;}
             if (data[2] == "*") {continue;}
@@ -3000,29 +3567,55 @@ void main_dna_map ()
 		string v_bam_nodup_metrics = v_output + v_sample_sub + ".adjusted.nodup.metrics";
 		
 		
-		
 		v_log = v_output + "/log/adjusted_nodup.log";
 
 		if (v_nanopore == 0) {
 			std::size_t found = v_picard.find(".jar");
-			if (found!=std::string::npos)
-			{
-				v_command = "java -jar " + v_picard + " MarkDuplicates I=" +  v_bam_out + " O=" + v_bam_nodup + " M=" + v_bam_nodup_metrics + " VALIDATION_STRINGENCY=SILENT 2>" + v_log;
-			}
-			else {
-				v_command = v_picard + " MarkDuplicates I=" +  v_bam_out + " O=" + v_bam_nodup + " M=" + v_bam_nodup_metrics + " VALIDATION_STRINGENCY=SILENT 2>" + v_log;
-			}
+			
+			if (v_nomarkdupl == 0) {
+				if (found!=std::string::npos)
+				{
+					v_command = "java -jar " + v_picard + " MarkDuplicates I=" +  v_bam_out + " O=" + v_bam_nodup + " M=" + v_bam_nodup_metrics + " VALIDATION_STRINGENCY=SILENT 2>" + v_log;
+				}
+				else {
+					v_command = v_picard + " MarkDuplicates I=" +  v_bam_out + " O=" + v_bam_nodup + " M=" + v_bam_nodup_metrics + " VALIDATION_STRINGENCY=SILENT 2>" + v_log;
+				}
 
-			if (v_rna == 0) {
-				v_log = v_output + "/log/adjusted_nodup_index.log";
-				system (v_command.c_str());
-				v_command = v_samtools + " index " + v_bam_nodup + " 2>" + v_log;
-				system (v_command.c_str());
+				if (v_rna == 0) {
+					v_log = v_output + "/log/adjusted_nodup_index.log";
+					system (v_command.c_str());
+					v_command = v_samtools + " index " + v_bam_nodup + " 2>" + v_log;
+					system (v_command.c_str());
+				}
 			}
 		}
 		
     }
 	
+
+	if (v_nanopore == 1) {
+		string merged_sam_adjusted = v_output + v_sample_sub + ".adjusted.sam";
+		ofstream sam_adjusted;
+		sam_adjusted.open (merged_sam_adjusted .c_str());
+		sam_adjusted <<  "@CO\tkir-mapper " << Program_version << ", human genome version hg38" << endl;
+		
+		for (auto &item : sq_data) {sam_adjusted << item.first << endl;}
+		for (auto &item : rg_data) {sam_adjusted << item.first << endl;}
+		for (auto &item : adjusted_data) {sam_adjusted << item << endl;}
+		sam_adjusted.close();
+
+		string v_bam_out = v_output + v_sample_sub + ".adjusted.bam";
+		string v_log = v_output + "/log/adjusted_sort.log";
+		v_command = v_samtools + " sort -@ " + v_threads + " -m 1g " + merged_sam_adjusted  + " > " +  v_bam_out + " 2>" + v_log;
+		system (v_command.c_str());
+		v_log = v_output + "/log/adjusted_index.log";
+		v_command = v_samtools + " index " + v_bam_out + " 2>" + v_log;
+		system (v_command.c_str());
+		
+    }
+	
+
+
     string merged_sam_unique = v_output + v_sample_sub + ".unique.sam";
     ofstream sam_unique;
     sam_unique.open (merged_sam_unique .c_str());

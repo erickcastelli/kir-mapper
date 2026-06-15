@@ -1,9 +1,9 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp.
 //  erick.castelli@unesp.br
-// Contributions from code on tht web
+//  Contributions from code from the web and Claude
 
 
 #include "functions.hpp"
@@ -83,6 +83,23 @@ string split_region (int th, string chr, int start, int end, int stutter)
     return result.substr(1);
 }
 
+string splitSegmentIntoChunks(int chunkSize, int segStart, int segEnd, int overlapSize, const std::string& chrom) {
+    if (chunkSize <= overlapSize) {
+        throw std::invalid_argument("chunkSize must be greater than overlapSize to avoid infinite loop.");
+    }
+
+    std::ostringstream result;
+    int step = chunkSize - overlapSize;
+
+    for (int start = segStart; start < segEnd; start += step) {
+        int end = std::min(start + chunkSize, segEnd);
+        result << chrom << ":" << start << "-" << end << "\n";
+
+        if (end == segEnd) break;
+    }
+
+    return result.str();
+}
 
 void screen_message (int size, int left, string message, int enter, int quiet)
 {
@@ -244,6 +261,7 @@ string splitcigar (string cigar)
     return cigar;
 }
 
+
 string splitNcigar (string cigar)
 {
     boost::replace_all(cigar, "N", "N,");
@@ -310,8 +328,6 @@ string decompose_mpileup (string cigar)
     cigar.erase(std::remove(cigar.begin(), cigar.end(), '^'), cigar.end());
     cigar.erase(std::remove(cigar.begin(), cigar.end(), ']'), cigar.end());
     cigar.erase(std::remove(cigar.begin(), cigar.end(), '~'), cigar.end());
-//    cigar.erase(std::remove(cigar.begin(), cigar.end(), 'N'), cigar.end());
-//    cigar.erase(std::remove(cigar.begin(), cigar.end(), 'n'), cigar.end());
 
     string new_cigar = "";
     for (int a = 0; a < cigar.size(); a++)
@@ -991,7 +1007,6 @@ string typing_dna (string gene, string fastq1, string fastq2, int maxselect, int
                 }
             }
         }
-        
 
         if (best_hit != "") {return best_hit;}
         return "fail: no best hit";
@@ -1013,8 +1028,6 @@ unsigned long long getTotalSystemMemory()
 string treat_genotype (string genotype, int copyn)
 {
     
-	
-	
 	vector <string> fields;
     boost::split(fields,genotype,boost::is_any_of(":"));
     if (fields[0].find(".") != std::string::npos) {return genotype;}
@@ -1030,93 +1043,113 @@ string treat_genotype (string genotype, int copyn)
     vector <string> subdepth;
     boost::split(subdepth,depth,boost::is_any_of(","));
     
-    
-    int change = 0;
-    for (int a = 0; a < alleles.size();a++)
+
+
+    if (copyn == 1)
     {
-        float alleledepth = stof(subdepth[stoi(alleles[a])]);
-        if (alleledepth <= 2) {alleles[a] = ".";change++;}
-    }
-    
-    if (change != 0)
-    {
-        string newgeno = boost::algorithm::join(alleles, "/");
-        return newgeno + ":" + fields[1] + ":" + fields[2] + ":" + fields[3];
-    }
-
-    
-    map <string,int> allelecount;
-    for(auto item : alleles) {allelecount[item]++;}
-    string type = "";
-    if (allelecount.size() == 1) {type = "homoz";}
-    if (allelecount.size() > 1) {type = "heteroz";}
-
-    
-
-    if (type == "homoz")
-    {
-        if (cov < 6)
-        {
-            for (int a = 1; a < alleles.size();a++)
-            {
-                alleles[a] = ".";
-            }
-        }
+ 
+        int change = 0;
+        float alleledepth = stof(subdepth[stoi(alleles[0])]);
+        if (alleledepth == 0) {alleles[0] = "."; change++;}
         
-
-        if (cov >= 6)
+        if (change != 0)
         {
-            for (int a = 0; a < alleles.size();a++)
-            {
-                float alleledepth = stof(subdepth[stoi(alleles[a])]);
-                float ratio = alleledepth / cov;
-                if (copyn == 1){
-                    if (ratio <= 0.7) {alleles[a] = ".";break;}
-                }
-                if (copyn > 1){
-                    if (ratio <= 0.85) {alleles[a] = ".";break;}
-                }
-            }
-        }
-
-        string newgeno = boost::algorithm::join(alleles, "/");
-        return newgeno + ":" + fields[1] + ":" + fields[2] + ":" + fields[3];
-    }
-    
-    if (type == "heteroz")
-    {
-        // is there a major allele?
-        string majorallele = "";
-        
-        for (auto item : alleles)
-        {
-            float alleledepth = stof(subdepth[stoi(item)]);
-            float ratio = alleledepth / cov;
-            if (ratio >= 0.9) {majorallele = item;}
-        }
-        
-        if (majorallele != "")
-        {
-            for (int a = 0; a < alleles.size();a++)
-            {
-                alleles[a] = majorallele;
-            }
-            string newgeno = boost::algorithm::join(alleles, "/");
-            return newgeno + ":" + fields[1] + ":" + fields[2] + ":" + fields[3];
-        }
-        
-        if (majorallele == "")
-        {
-            for (int a = 0; a < alleles.size();a++)
-            {
-                float alleledepth = stof(subdepth[stoi(alleles[a])]);
-                float ratio = alleledepth / cov;
-                if (ratio <= 0.25) {alleles[a] = ".";}
-            }
             string newgeno = boost::algorithm::join(alleles, "/");
             return newgeno + ":" + fields[1] + ":" + fields[2] + ":" + fields[3];
         }
     }
+
+
+    if (copyn >= 2) {
+
+        int change = 0;
+        for (int a = 0; a < alleles.size();a++)
+        {
+            float alleledepth = stof(subdepth[stoi(alleles[a])]);
+            if (alleledepth <= 2) {alleles[a] = ".";change++;}
+        }
+        
+        if (change != 0)
+        {
+            string newgeno = boost::algorithm::join(alleles, "/");
+            return newgeno + ":" + fields[1] + ":" + fields[2] + ":" + fields[3];
+        }
+
+        
+        map <string,int> allelecount;
+        for(auto item : alleles) {allelecount[item]++;}
+        string type = "";
+        if (allelecount.size() == 1) {type = "homoz";}
+        if (allelecount.size() > 1) {type = "heteroz";}
+
+        
+
+        if (type == "homoz")
+        {
+            if (cov < 6)
+            {
+                for (int a = 1; a < alleles.size();a++)
+                {
+                    alleles[a] = ".";
+                }
+            }
+            
+
+            if (cov >= 6)
+            {
+                for (int a = 0; a < alleles.size();a++)
+                {
+                    float alleledepth = stof(subdepth[stoi(alleles[a])]);
+                    float ratio = alleledepth / cov;
+                    if (copyn == 1){
+                        if (ratio <= 0.7) {alleles[a] = ".";break;}
+                    }
+                    if (copyn > 1){
+                        if (ratio <= 0.85) {alleles[a] = ".";break;}
+                    }
+                }
+            }
+
+            string newgeno = boost::algorithm::join(alleles, "/");
+            return newgeno + ":" + fields[1] + ":" + fields[2] + ":" + fields[3];
+        }
+        
+        if (type == "heteroz")
+        {
+            // is there a major allele?
+            string majorallele = "";
+            
+            for (auto item : alleles)
+            {
+                float alleledepth = stof(subdepth[stoi(item)]);
+                float ratio = alleledepth / cov;
+                if (ratio >= 0.9) {majorallele = item;}
+            }
+            
+            if (majorallele != "")
+            {
+                for (int a = 0; a < alleles.size();a++)
+                {
+                    alleles[a] = majorallele;
+                }
+                string newgeno = boost::algorithm::join(alleles, "/");
+                return newgeno + ":" + fields[1] + ":" + fields[2] + ":" + fields[3];
+            }
+            
+            if (majorallele == "")
+            {
+                for (int a = 0; a < alleles.size();a++)
+                {
+                    float alleledepth = stof(subdepth[stoi(alleles[a])]);
+                    float ratio = alleledepth / cov;
+                    if (ratio <= 0.25) {alleles[a] = ".";}
+                }
+                string newgeno = boost::algorithm::join(alleles, "/");
+                return newgeno + ":" + fields[1] + ":" + fields[2] + ":" + fields[3];
+            }
+        }
+    }
+    
     return genotype;
 }
 
@@ -1155,68 +1188,7 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
     banned["KIR2DS2.016"];
     banned["KIR2DL1.026"];
     banned["KIR2DL1.026N"];
-
-/*
-
-    debug_message("Selecting alleles ... start");
-    map <string,int> motif;
-    
-    ifstream FQ;
-    FQ.open (fq1.c_str());
-    for( std::string item; getline( FQ, item ); )
-    {
-        string id = item;
-        getline( FQ, item );
-        string seq = item;
-        getline( FQ, item );
-        string info = item;
-        getline( FQ, item );
-        string qual = item;
-        
-        string rev = reverse_and_complement(seq);
-        if (seq.size() < size) {continue;}
-        for (int a = 0; a < (seq.size() - size); a++)
-        {
-            string sub = seq.substr(a,size);
-            motif[sub]++;
-        }
-        for (int a = 0; a < (rev.size() - size); a++)
-        {
-            string sub = rev.substr(a,size);
-            motif[sub]++;
-        }
-    }
-    FQ.close();
-    
-    if (fq2 != "") {
-        ifstream FQ;
-        FQ.open (fq2.c_str());
-        for( std::string item; getline( FQ, item ); )
-        {
-            string id = item;
-            getline( FQ, item );
-            string seq = item;
-            getline( FQ, item );
-            string info = item;
-            getline( FQ, item );
-            string qual = item;
-            
-            string rev = reverse_and_complement(seq);
-            for (int a = 0; a < (seq.size() - size); a++)
-            {
-                string sub = seq.substr(a,size);
-                motif[sub]++;
-            }
-            for (int a = 0; a < (rev.size() - size); a++)
-            {
-                string sub = rev.substr(a,size);
-                motif[sub]++;
-            }
-        }
-        FQ.close();
-    }
-   */ 
-    
+   
     
     vector <string> fasfiles;
     for (const auto & entry : fs::directory_iterator(fas))
@@ -1235,59 +1207,6 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
         boost::replace_all(allele, ".fas", "");
         selected_alleles_list.push_back(allele);   
     }
-  /*  
-    map <float,string> allele_motif;
-    for (auto item : fasfiles)
-        {
-            string file = item;
-            string allele = base_name(file);
-            
-            boost::replace_all(allele, ".fas", "");
-            
-            float tested = 0;
-            float valid = 0;
-            
-            ifstream FAS;
-            FAS.open (file.c_str());
-            for( std::string item; getline( FAS, item ); )
-            {
-                string id = item;
-                getline( FAS, item );
-                string seq = item;
-                for (int a = 0; a < (seq.size() - size); a++)
-                {
-                    string sub = seq.substr(a,size);
-                    if (sub.find("N") != std::string::npos) {continue;}
-                    tested++;
-                    if (motif.find(sub) != motif.end()) {
-                        if (motif[sub] >= match_level) {valid++;}
-                    }
-                }
-            }
-            FAS.close();
-            float ratio = valid / tested;
-            allele_motif[ratio].append("," + allele);
-        }
-    
-    
-    vector <string> selected_alleles_list;
-    for (auto iter = allele_motif.rbegin(); iter != allele_motif.rend(); ++iter) {
-        
-        vector <string> alleles;
-        string all = iter->second.substr(1);
-        float score = iter->first;
-        boost::split(alleles,all,boost::is_any_of(","));
-        
-        for (auto item: alleles)
-        {
-            if (banned.find(item) != banned.end()) {continue;}
-            selected_alleles_list.push_back(item);
-        }
-        //if (selected_alleles_list.size() >= nselect) {break;}
-    }
-    
-    if (selected_alleles_list.size() == 0) {return fails;}
-    */
 
     debug_message("List of alleles ...");
 
@@ -1298,7 +1217,6 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
     {
         select_alleles[item] = 1;
         debug_message(item);
-        
     }
     
     string file = out + "/list_of_allele.preselection.txt";
@@ -1309,21 +1227,6 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
         selected_alleles_list.push_back(item.first);
         alleleout << item.first << endl;
     }
-    
-    
-
-    
-
-
-
-
-    
-    
-    
-    
-    
-    
-    
     
     
     debug_message("Quick genotyping ... start");
@@ -1457,7 +1360,7 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
 
                     string vcfout = out + "/" + gene + "." + region_out + ".vcf";
                     mtxadj.lock(); files_to_remove.push_back(vcfout); mtxadj.unlock();
-                    string hg38ref = db + "/reference/hg38/reference.fasta";
+                    string hg38ref = db + "/reference/hg38/hg38DH.fa";
 
                     string cmd = v_freebayes + " -A " + cnref + " -f " + hg38ref + " -b " + bam + " -r " + region;
                     for (auto item : bamlist) {cmd.append(" -b " + item);}
@@ -1633,13 +1536,6 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
       vcf.close();
       debug_message("Treating VCF ... end");
       
-
-    
-    
-    
-    
-    
-    
         
     // reloading
     debug_message("Reloading VCF ... start");
@@ -2081,8 +1977,6 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
         if (selected_diplotypes.size() >= 10) {return "failed";}
     }
 
-
-    
     
     debug_message("Testing depth ... start");
     
@@ -2221,7 +2115,6 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
     map <pair<string,string>,float> scores;
     map <string,int> used;
 
-//    ThreadPool pair_pool(1);
     ThreadPool pair_pool(stoi(v_threads));
     std::vector< std::future<int> > pair_results;
     
@@ -2719,6 +2612,10 @@ string adjust_freeb (string gene, string fq1, string fq2, string out, string thr
 
 
 
+
+
+
+
 string adjust(string gene, string r1, string r2, string out, string nthreads)
 {
     string return_res = "failed";
@@ -2758,7 +2655,6 @@ string adjust(string gene, string r1, string r2, string out, string nthreads)
     }
     command.append(" -y " + fas);
     
-//    cout << endl << command << endl;
     
     string outscript = GetStdoutFromCommand(command);
     if (outscript.find("ailed!") != std::string::npos) {
@@ -2919,122 +2815,6 @@ std::map<std::string, std::string> TypeCDS( string gene, string r1, string r2)
     if (sequence_size.size() == 0) {return return_res;}
     
     
-
-
-
-    /*
-    
-    
-    // SELECTING
-    
-    
-    ThreadPool pool_first_round(stoi(v_threads));
-    std::vector< std::future<int> > results_first_round;
-    map <float,string> allele_first_round;
-    int loop = 1;
-
-    for (auto item : sequence_size)
-    {
-        string allele = item.first;
-        
-        results_first_round.emplace_back(
-            pool_first_round.enqueue([loop, allele, gene, &allele_first_round,r1,r2]
-                {
-                    
-                    string tmp_ref = v_db + "/adjustment/cds/" + gene + "/" + allele + ".fas";
-                    string log = v_output + "/adjustment/" + gene + "/tmp_" + allele + ".log";;
-                    
-                    string cmd = v_bwa + " mem -B2 -L 1 " + tmp_ref + " " + r1 + " " + " 2> " + log + " | " + v_samtools + " sort - | " + v_samtools + " mpileup -f " + tmp_ref + " -a - 2>" + log;
-                    string pileA = GetStdoutFromCommand(cmd.c_str());
-                    cmd = v_bwa + " mem -B2 -L 1 " + tmp_ref + " " + r2 + " " + " 2> " + log + " | " + v_samtools + " sort - | " + v_samtools + " mpileup -f " + tmp_ref + " -a - 2>" + log;
-                    string pileB = GetStdoutFromCommand(cmd.c_str());
-                    
-                    
-                    vector <string> piledataA;
-                    boost::split(piledataA,pileA,boost::is_any_of("\n"));
-                    vector <string> piledataB;
-                    boost::split(piledataB,pileB,boost::is_any_of("\n"));
-
-    
-                    float valid = 0;
-                    float comparisons = 0;
-                    
-                    for (auto line : piledataA)
-                    {
-                        if (line == "") {continue;}
-                        if (line.substr(0,1) == "[") {continue;}
-                        vector <string> fields;
-                        boost::split(fields,line,boost::is_any_of("\t"));
-                        if (fields[2] == "N") {continue;}
-                        if (fields[3] == "0") {continue;}
-                        string allele = fields[0];
-                        string bases = fields[4];
-                        int x = boost::count(bases, ',');
-                        int y = boost::count(bases, '.');
-                        float refcov = float(x) + float(y);
-                        if ((refcov >= 4))
-                        {
-                            valid++;
-                        }
-                        comparisons++;
-                    }
-            
-                    for (auto line : piledataB)
-                    {
-                        if (line == "") {continue;}
-                        if (line.substr(0,1) == "[") {continue;}
-                        vector <string> fields;
-                        boost::split(fields,line,boost::is_any_of("\t"));
-                        if (fields[2] == "N") {continue;}
-                        if (fields[3] == "0") {continue;}
-                        string allele = fields[0];
-                        string bases = fields[4];
-                        int x = boost::count(bases, ',');
-                        int y = boost::count(bases, '.');
-                        float refcov = float(x) + float(y);
-                        if ((refcov >= 4))
-                        {
-                            valid++;
-                        }
-                        comparisons++;
-                    }
-                    
-                    float score = valid / comparisons;
-                    mtx_type.lock();
-                    allele_first_round[score].append("," + allele);
-                    mtx_type.unlock();
-                    removefile(log, 0);
-                    return 1;
-                })
-        );
-        loop++;
-    }
-
-    for(auto && result: results_first_round){result.get();} // waiting for all threads
-    
-    
-    vector <string> valid_alleles;
-    int round = 0;
-    for (auto iter = allele_first_round.rbegin(); iter != allele_first_round.rend(); ++iter) {
-        vector <string> alleles;
-        if (iter->first < 0.95) {continue;}
-        boost::split(alleles,iter->second,boost::is_any_of(","));
-        for (auto item : alleles)
-        {
-            if (item == "") {continue;}
-            valid_alleles.push_back(item);
-        }
-        round++;
-        if (valid_alleles.size() > 10) {break;}
-        if (round == 2) {break;}
-    }
-
-    if (valid_alleles.size() < 2) {return return_res;}
-    
-  */
-    
-    
-    
 // PAIRING
     
     
@@ -3153,7 +2933,6 @@ std::map<std::string, std::string> TypeCDS( string gene, string r1, string r2)
                         float compadj = pow(comp,10);
                         float error = 1-((errorA + errorB) / 2);
                         float erroradj = pow(error,10);
-//                        float score = compadj * cov * erroradj;
                         float score = compadj * erroradj;
                         
                         final_scores[score].append("," + alleleA + "\t" + alleleB);
@@ -3341,10 +3120,6 @@ std::map<std::string, std::string> TypeCDS( string gene, string r1, string r2)
         {
             return_res["reads"].append("," + read + ";" + to_string(nmB));
         }
- //       if (nmA == nmB)
- //       {
- //           return_res["reads"].append("," + read + ";" + to_string(nmB));
- //       }
     }
     for (auto item : reads_to_primary_B)
     {
@@ -3557,16 +3332,6 @@ void check_fasta(string vstart, string vend, string inputvcf, string referencefi
     }
     vcf.close();
 
-
-
-
-    if (format_pos == 0) { 
-//        warnings.push_back ("It was not possible to detect the FORMAT field. Please check the VCF file."); 
-//        PrintWarnings(); return;
-    }
-    if (snps == 0) {
- //       warnings.push_back ("No variants within this segment and all samples will present the same reference sequence.");
-    }
 
 
 

@@ -1,7 +1,7 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp.
 //  erick.castelli@unesp.br
 
 
@@ -34,6 +34,7 @@
 mutex mtxp;
 
 int minhit = 3;
+//int nanofragsize = 1500;
 
 void main_preselect ()
 {
@@ -72,8 +73,7 @@ void main_preselect ()
         screen_message (screen_size, 2, "-threads     number of threads [" + v_threads + "]", 1, v_quiet);
 //        screen_message (screen_size, 2, "bed         BED file to override the one in the database", 1, v_quiet);
         screen_message (screen_size, 2, "-buffer      number of sequences in buffer [" + to_string(v_buffer) + "]", 1, v_quiet);
-        screen_message (screen_size, 2, "-config      path to a kir-mapper configuration file", 1, v_quiet);
-                       
+                        
         if (v_bwa != "") {v_message = "[found at " + v_bwa + "]";}
         if (v_bwa == "") {v_message = "(!!! bwa not detected !!!)";}
         v_message = "-bwa         path to BWA " + v_message;
@@ -285,10 +285,15 @@ void main_preselect ()
   
         ifstream file_db(v_db_info.c_str());
         int db_version_ok = 0;
+        int db_engine_ok = 0;       
         for( std::string line; getline( file_db, line ); )
         {
             if (line == "kir-mapper:1") {
                 db_version_ok = 1;
+                continue;
+            }
+            if (line == "engine:1.1") {
+                db_engine_ok = 1;
                 continue;
             }
             vector<string> db_data;
@@ -303,7 +308,7 @@ void main_preselect ()
         file_db.close();
         
         
-        if (db_version_ok == 0) {
+        if ((db_version_ok == 0) || (db_engine_ok == 0)){
             v_message = "This database is not compatible with this version of kir-mapper.";
             warnings.push_back (v_message);
             v_sample = "";
@@ -344,10 +349,6 @@ void main_preselect ()
         
         v_command = "mkdir " + v_output;
         v_system_out = GetStdoutFromCommand(v_command);
-    //    v_command = "rm -rf " + v_output + "/*";
-    //    v_system_out = GetStdoutFromCommand(v_command);
-    //    v_command = "rm -rf " + v_output + "/log/";
-     //   v_system_out = GetStdoutFromCommand(v_command);
         v_command = "mkdir " + v_output + "/log/";
         v_system_out = GetStdoutFromCommand(v_command);
     
@@ -804,6 +805,8 @@ void main_preselect ()
             
             OUTpairedR1.close();
         }
+
+        screen_message (screen_size, 0, "Selecting reads: done", 1, v_quiet);
   
     }
     
@@ -1216,7 +1219,10 @@ void main_preselect ()
             OUTselectR1.close();
             selected_results_r1_pre.clear();
         }
-         screen_message (screen_size, 0, "Selecting reads: done", 1, v_quiet);
+        
+        
+     
+        screen_message (screen_size, 0, "Selecting reads: done", 1, v_quiet);
     }
     
     

@@ -1,7 +1,7 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  20246 GeMBio.Unesp.
 //  erick.castelli@unesp.br
 
 

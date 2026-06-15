@@ -1,9 +1,9 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp.
 //  erick.castelli@unesp.br
-// Contributions from code on tht web
+// Contributions from code on the web and Claude
 
 #include <iostream>
 #include <stdlib.h>
@@ -52,6 +52,7 @@ std::vector<size_t> sorted_index(const std::vector<t> &v) {
 
   return idx;
 }
+
 // https://stackoverflow.com/a/1267878/7128154
 template< typename order_iterator, typename value_iterator >
 void reorder( order_iterator order_begin, order_iterator order_end, value_iterator v )  {
@@ -142,6 +143,7 @@ double quantile(double q, std::vector<t> values, std::vector<double> weights = s
 
 }
 
+
 template <typename t>
 double quantile(double q, std::vector<t> values, std::vector<int> weights)
 {
@@ -152,25 +154,6 @@ double quantile(double q, std::vector<t> values, std::vector<int> weights)
 
 void main_ncopy ()
 {
-
-
-
-/*
-    std::vector<int> vals {96,35,59,52,14,51,28,8,13,10,75,83,20};
-    std::cout << "quantile(0.25, vals)=" << quantile(0.25, vals) << std::endl;
-    std::cout << "quantile(.75, vals)=" << quantile(.75, vals) << std::endl;
-
-    std::vector<int> vals2 {43,36,55,34,15,89,68,46,11,12,67,73,15};
-    std::cout << "quantile(0.25, vals)=" << quantile(0.25, vals2) << std::endl;
-    std::cout << "quantile(.75, vals)=" << quantile(.75, vals2) << std::endl;
-
-
-    return;
-
-    std::vector<int> vals2 {1, 2, 3};
-    std::vector<double> ws2 {1, 2, 3};
-    std::cout << "quantile(.13, vals2, ws2)=" << quantile(.13, vals2, ws2) << std::endl;
-*/
     
     
     int v_check = 0;
@@ -199,7 +182,6 @@ void main_ncopy ()
         screen_message (screen_size, 2, "-threads     number of threads [" + v_threads + "]", 1, v_quiet);
         screen_message (screen_size, 2, "-reference   KIR3DL3,5UPKIR,HLA-E,HLA-G [default: KIR3DL3]", 1, v_quiet);
         screen_message (screen_size, 2, "-samples     text file listing the samples to consider", 1, v_quiet);
-        screen_message (screen_size, 2, "-config      path to a kir-mapper configuration file", 1, v_quiet);
         screen_message (screen_size, 2, "--exome     only exons", 1, v_quiet);
         screen_message (screen_size, 2, "--quiet     quiet mode", 1, v_quiet);
         screen_message (screen_size, 0, "", 1, v_quiet);
@@ -1110,9 +1092,6 @@ void main_ncopy ()
  
             float depth_ref = copyresults[key2];
             float depth_ratio = copyresults[key] / depth_ref;
-
- //           float motif_ref = motif_count[key2];
- //           float motif_ratio = motif_count[key] / motif_ref;
 
             float ratio = depth_ratio;
             

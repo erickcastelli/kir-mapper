@@ -1,7 +1,7 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp.
 //  erick.castelli@unesp.br
 
 #ifndef functions_hpp
@@ -29,6 +29,7 @@ using namespace std;
 
 std::string base_name(std::string const & path);
 string split_region (int th, string chr, int start, int end, int stutter);
+string splitSegmentIntoChunks(int chunkSize, int segStart, int segEnd, int overlapSize, const std::string& chrom);
 double median(vector<float> vec);
 void screen_message (int size, int left, string message, int enter, int quiet);
 bool ends_with(const std::string &filename, const std::string &ext);

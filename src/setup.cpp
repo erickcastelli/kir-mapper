@@ -1,7 +1,7 @@
 //  kir-mapper
 //
 //  Created by Erick C. Castelli
-//  2024 GeMBio.Unesp.
+//  2026 GeMBio.Unesp.
 //  erick.castelli@unesp.br
 
 
@@ -69,6 +69,13 @@ void main_setup() {
     }
     screen_message (screen_size, 0, list, 1, v_quiet);
 
+
+    list = "  Minimap2, version(s)";
+    for (auto item : minimap_versions)
+    {
+        list.append (" " + item.first);
+    }
+    screen_message (screen_size, 0, list, 1, v_quiet);
 
 
     list = "  Freebayes, version(s)";
@@ -176,14 +183,15 @@ void main_setup() {
     string command = "which samtools";
     string samtools = "";
     cout << "**** Configuring " << program << " ***" << endl;
-    cout << "Versions < 1.18 won't work." << endl;
+    cout << "Versions < 1.21 won't work." << endl;
     string item = GetStdoutFromCommand(command);
     item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
     
 samtools_start:
     if (item != "")
     {
-        cout << program << " path (automatic detection): " << item << endl;
+        cout << program << " path (automatic detection): " << endl;
+        cout << "   " << item << endl;
         cout << "Use this one (y), or change (c), or quit (q): ";
         string res = "";
         cin >> res;
@@ -202,6 +210,8 @@ samtools:
             cout << "Please write the " << program << " path, or drag it below (or q to quit): " << endl;
             cin >> item;
             item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+            boost::replace_all(item , "'", "");
+
             if ((item == "q") || (item == "Q")) {cout << endl << endl; return;}
             if (! fileExists(item))
             {
@@ -253,7 +263,8 @@ samtools:
 bwa_start:
     if (item != "")
         {
-            cout << program << " path (automatic detection): " << item << endl;
+            cout << program << " path (automatic detection): " << endl;
+            cout << "   " << item << endl;
             cout << "Use this one (y), or change (c): ";
             string res = "";
             cin >> res;
@@ -270,6 +281,8 @@ bwa:
                 cout << "Please write the " << program << " path, or drag it bellow (or q to quit): " << endl;
                 cin >> item;
                 item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+                boost::replace_all(item , "'", "");
+
                 if ((item == "q") || (item == "Q"))  {cout << endl << endl; return;}
                 if (! fileExists(item))
                     {
@@ -303,7 +316,74 @@ bwa:
 
     
 
+
     
+    
+// ********** MINIMAP  ************
+    program = "minimap2";
+    command = "which minimap2";
+    string minimap = "";
+    cout << endl;
+    cout << endl;
+    cout << "**** Configuring " << program << " ***" << endl;
+    item = GetStdoutFromCommand(command);
+    item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+ 
+mini_start:
+    if (item != "")
+        {
+            cout << program << " path (automatic detection): " << endl;
+            cout << "   " << item << endl;
+        
+            cout << "Use this one (y), or change (c): ";
+            string res = "";
+            cin >> res;
+            int valid = 0;
+            if ((res == "y") || (res == "Y")) {valid = 1; minimap = item;}
+            if ((res == "c") || (res == "C")) {valid = 1;item = "";}
+            if (valid == 0) {goto mini_start;}
+        }
+    
+mini:
+    if (item == "")
+        {
+            while (! fileExists(item)) {
+                cout << "Please write the " << program << " path, or drag it bellow (or q to quit): " << endl;
+                cin >> item;
+                boost::replace_all(item , "'", "");
+                item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+                if ((item == "q") || (item == "Q"))  {cout << endl << endl; return;}
+                if (! fileExists(item))
+                    {
+                        cout << "Invalid file or program." << endl;
+                    }
+                else {cout << program << " path: " << item << endl << endl;}
+            }
+        }
+    
+    minimap = item;
+    item = GetStdoutFromCommand(minimap + " --version");
+    data.clear();
+    boost::split(data,item,boost::is_any_of("\n"));
+    sub.clear();
+    boost::split(sub,data[0],boost::is_any_of("-"));
+    if (minimap_versions.find(sub[0]) != minimap_versions.end())
+        {
+            cout << "This version (" << sub[0] << ") is compatible with kir-mapper" << endl;
+        }
+    else {
+        cout << "This version has not been tested with kir-mapper\nContinue anyway (y), quit (q), or return (r)? ";
+        cin >> item;
+        item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+        int valid = 0;
+        if ((item == "q") || (item == "Q")) {valid = 1; cout << endl << endl; return; }
+        if ((item == "r") || (item == "R")) {valid = 1; item = ""; goto mini;}
+        if ((item == "y") || (item == "Y")) {valid = 1;}
+        if (valid == 0) {goto mini;}
+    }
+
+    
+
     
     
 // ********** BCFTOOLS  ************
@@ -319,7 +399,8 @@ bwa:
 bcf_start:
     if (item != "")
         {
-            cout << program << " path (automatic detection): " << item << endl;
+            cout << program << " path (automatic detection): " << endl;
+            cout << "   " << item << endl;
             cout << "Use this one (y), or change (c): ";
             string res = "";
             cin >> res;
@@ -336,6 +417,7 @@ bcf:
                 cout << "Please write the " << program << " path, or drag it bellow (or q to quit): " << endl;
                 cin >> item;
                 item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+                boost::replace_all(item , "'", "");
                 if ((item == "q") || (item == "Q"))  {cout << endl << endl; return;}
                 if (! fileExists(item))
                     {
@@ -371,40 +453,6 @@ bcf:
     
     
     
-    
-// ********** Database  ************
-    
-    item = "";
-    program = "Database";
-    string db = "";
-    cout << endl;
-    cout << endl;
-    cout << "**** Configuring " << program << " ***" << endl;
-    
-    if (item == "")
-        {
-            while (! fileExists(item)) {
-                cout << "Please write the " << program << " path, or drag it below (or q to quit): " << endl;
-                cin >> item;
-                item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
-                if ((item == "q") || (item == "Q"))  {cout << endl << endl; return;}
-                if (! fileExists(item))
-                    {
-                        cout << "Invalid file or folder." << endl;
-                    }
-                else {cout << program << " path: " << item << endl << endl;}
-            }
-        }
-    db = item;
-    
-    
-
-    
-    
-    
-    
-    
-    
 string version = "";
 // ********** Freebayes  ************
 program = "Freebayes";
@@ -425,7 +473,8 @@ try
 freebayes_start:
     if (item != "")
         {
-            cout << program << " path (automatic detection): " << item << endl;
+            cout << program << " path (automatic detection): " << endl;
+            cout << "   " << item << endl;
             cout << "Use this one (y), or change (c), or quit (q): ";
             string res = "";
             cin >> res;
@@ -443,6 +492,8 @@ freebayes:
                 cout << "Please write the " << program << " path, or drag it below (or q to quit): " << endl;
                 cin >> item;
                 item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+                boost::replace_all(item , "'", "");
+
                 if ((item == "q") || (item == "Q")) {cout << "Quiting!" << endl; return;}
                 if (! fileExists(item))
                     {
@@ -534,7 +585,8 @@ freebayes:
     whats_start:
         if (item != "")
             {
-                cout << program << " path (automatic detection): " << item << endl;
+                cout << program << " path (automatic detection): " << endl;
+                cout << "   " << item << endl;
                 cout << "Use this one (y), or change (c), or quit (q): ";
                 string res = "";
                 cin >> res;
@@ -552,6 +604,8 @@ freebayes:
                     cout << "Please write the " << program << " path, or drag it below (or q to quit): " << endl;
                     cin >> item;
                     item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+                    boost::replace_all(item , "'", "");
+
                     if ((item == "q") || (item == "Q")) {cout << endl << endl; return;}
                     if (! fileExists(item))
                         {
@@ -567,13 +621,10 @@ freebayes:
         data.clear();
         boost::replace_all(item , "\n", "");
 
- //       boost::split(data,item,boost::is_any_of("\n"));
- //       sub.clear();
- //       boost::split(sub,data[0],boost::is_any_of(" "));
         
         if (whats_versions.find(item) != whats_versions.end())
             {
-                cout << "This version (" << sub[1] << ") is compatible with kir-mapper" << endl;
+                cout << "This version (" << item << ") is compatible with kir-mapper" << endl;
             }
         else {
             cout << "This version has not been tested with kir-mapper\nContinue anyway (y), quit (q), or return (r)? ";
@@ -604,7 +655,8 @@ freebayes:
 star_start:
     if (item != "")
         {
-            cout << program << " path (automatic detection): " << item << endl;
+            cout << program << " path (automatic detection): " << endl;
+            cout << "   " << item << endl;
             cout << "Use this one (y), or change (c): ";
             string res = "";
             cin >> res;
@@ -621,6 +673,7 @@ star:
                 cout << "Please write the " << program << " path, or drag it bellow (or q to quit): " << endl;
                 cin >> item;
                 item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+                 boost::replace_all(item , "'", "");
                 if ((item == "q") || (item == "Q"))  {cout << endl << endl; return;}
                 if (! fileExists(item))
                     {
@@ -689,7 +742,8 @@ star:
     shapeit_start:
         if (item != "")
             {
-                cout << program << " path (automatic detection): " << item << endl;
+                cout << program << " path (automatic detection): " << endl;
+                cout << "   " << item << endl;
                 cout << "Use this one (y), or change (c), or quit (q): ";
                 string res = "";
                 cin >> res;
@@ -706,6 +760,8 @@ star:
                 while (! fileExists(item)) {
                     cout << "Please write the " << program << " path, or drag it below (or q to quit): " << endl;
                     cin >> item;
+                    boost::replace_all(item , "'", "");
+
                     item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
                     if ((item == "q") || (item == "Q")) {cout << endl << endl; return;}
                     if (! fileExists(item))
@@ -723,7 +779,33 @@ star:
     
     
 
-
+// ********** Database  ************
+    
+    item = "";
+    program = "Database";
+    string db = "";
+    cout << endl;
+    cout << endl;
+    cout << "**** Configuring " << program << " ***" << endl;
+    
+    if (item == "")
+        {
+            while (! fileExists(item)) {
+                cout << "Please write the " << program << " path, or drag it below (or q to quit): " << endl;
+                cin >> item;
+                item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+                boost::replace_all(item , "'", "");
+                if ((item == "q") || (item == "Q"))  {cout << endl << endl; return;}
+                if (! fileExists(item))
+                    {
+                        cout << "Invalid file or folder." << endl;
+                    }
+                else {cout << program << " path: " << item << endl << endl;}
+            }
+        }
+    db = item;
+    
+    
     
 
 
@@ -738,7 +820,7 @@ star:
     // ********** PICARD  ************
         
         program = "Picard Tools";
-        command = "which picard";
+        command = "which picard-tools";
         string picard = "";
         cout << endl;
         cout << endl;
@@ -760,12 +842,6 @@ star:
             }
                 catch (const std::exception& e)
             { item = "";}
-			
-			if (item == "")
-			{
-				command = "which picard.jar";
-				item = GetStdoutFromCommand(command);
-			}
 
         picard_start:
             if (item != "")
@@ -785,14 +861,14 @@ star:
             if (item == "")
                 {
                     while (! fileExists(item)) {
-                        cout << "Please write the " << program << " path, or drag it bellow (or q to quit): " << endl;
+                        cout << "Please write the " << program << " path, or drag the binary bellow (or q to quit): " << endl;
                         cin >> item;
                         item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
+                        boost::replace_all(item , "'", "");
                         if ((item == "q") || (item == "Q")) {cout << endl << endl; return;}
                         if (! fileExists(item))
                             {
                                 cout << "Invalid file or program." << endl;
-								
                             }
                         else {cout << program << " path: " << item << endl << endl;}
                     }
@@ -816,6 +892,7 @@ star:
     cout << "Samtools:  " << samtools << endl;
     cout << "Bcftools:  " << bcf << endl;
     cout << "BWA:       " << bwa << endl;
+    cout << "minimap2:  " << minimap << endl;
     cout << "WhatsHap:  " << whats << endl;
     cout << "Freebayes: " << freebayes << endl;
     cout << "STAR:      " << star << endl;
@@ -824,7 +901,7 @@ star:
     cout << endl;
     
 write:
-    cout << "Confirm writing the configuration file? (y or n) ";
+    cout << "Confirm writing the configuration file. (y or n) ";
     cin >> item;
     item.erase(std::remove(item.begin(), item.end(), '\n'), item.end());
     int valid = 0;
@@ -842,6 +919,7 @@ write:
     myfile << "samtools=" + samtools + "\n";
     myfile << "bcftools=" + bcf + "\n";
     myfile << "bwa=" + bwa + "\n";
+    myfile << "minimap=" + minimap + "\n";
     myfile << "whatshap=" + whats + "\n";
     myfile << "freebayes=" + freebayes + "\n";
     myfile << "picard=" + picard + "\n";
