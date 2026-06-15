@@ -8,11 +8,14 @@ ENV DEBIAN_FRONTEND noninteractive
 ENV TZ UTC
 
 
-RUN apt-get update && apt-get install -y build-essential cmake zlib1g-dev libncurses-dev git libboost-all-dev wget libcurl4-openssl-dev gzip zip libssl-dev nano
+RUN apt-get update && apt-get install -y build-essential zlib1g-dev libncurses-dev git libboost-all-dev wget libcurl4-openssl-dev gzip zip libssl-dev nano
 
 RUN apt-get install -y python3-dev python3-pip
 
+RUN pip3 install cmake
+
 RUN pip3 install --user whatshap==2.2
+
 RUN export PATH=$HOME/.local/bin:$PATH
 
 RUN apt-get install -y --no-install-recommends \
@@ -22,30 +25,35 @@ RUN apt-get install -y --no-install-recommends \
  		 r-recommended \
          r-cran-docopt
 		 
+
 RUN apt-get install -y --no-install-recommends \
                  bwa=0.7.17-6
 
+RUN apt-get install -y --no-install-recommends minimap2
 
-RUN wget https://github.com/samtools/samtools/releases/download/1.19.2/samtools-1.19.2.tar.bz2
-RUN tar -xvf samtools-1.19.2.tar.bz2
-WORKDIR /home/samtools-1.19.2
+
+RUN wget https://github.com/samtools/samtools/releases/download/1.21.1/samtools-1.21.1.tar.bz2
+RUN tar -xvf samtools-1.21.1.tar.bz2
+WORKDIR /home/samtools-1.21.1
 RUN make
 RUN make install
+
 
 WORKDIR /home
-RUN wget https://github.com/samtools/bcftools/releases/download/1.19/bcftools-1.19.tar.bz2
-RUN tar -xvf bcftools-1.19.tar.bz2
-WORKDIR /home/bcftools-1.19
+RUN wget https://github.com/samtools/bcftools/releases/download/1.20/bcftools-1.20.tar.bz2
+RUN tar -xvf bcftools-1.20.tar.bz2
+WORKDIR /home/bcftools-1.20
 RUN make
 RUN make install
+
 
 WORKDIR /home
 RUN mkdir freebayes
 WORKDIR /home/freebayes
-RUN wget https://github.com/freebayes/freebayes/releases/download/v1.3.6/freebayes-1.3.6-linux-amd64-static.gz
-RUN gunzip freebayes-1.3.6-linux-amd64-static.gz
-RUN chmod 777 freebayes-1.3.6-linux-amd64-static
-RUN mv freebayes-1.3.6-linux-amd64-static freebayes
+RUN wget https://github.com/freebayes/freebayes/releases/download/v1.3.10/freebayes-1.3.10-linux-amd64-static.gz
+RUN gunzip freebayes-1.3.10-linux-amd64-static.gz
+RUN chmod 777 freebayes-1.3.10-linux-amd64-static
+RUN mv freebayes-1.3.10-linux-amd64-static freebayes
 RUN cp freebayes /usr/bin/
 
 
@@ -63,6 +71,7 @@ RUN wget https://github.com/odelaneau/shapeit4/archive/refs/tags/v4.2.2.tar.gz
 RUN tar -xvf v4.2.2.tar.gz
 WORKDIR /home/shapeit4/shapeit4-4.2.2
 
+
 WORKDIR /home
 RUN mkdir Tools
 WORKDIR /home/Tools
@@ -70,6 +79,7 @@ RUN wget https://github.com/samtools/htslib/releases/download/1.11/htslib-1.11.t
 RUN tar -xvf htslib-1.11.tar.bz2
 WORKDIR /home/Tools/htslib-1.11
 RUN make
+
 
 WORKDIR /home/shapeit4/shapeit4-4.2.2
 RUN make HOME=/home/
@@ -117,6 +127,7 @@ RUN cp ~/.local/bin/whatshap /usr/bin/
 
 WORKDIR /home
 RUN echo "bwa=/usr/bin/bwa" >> ~/.kir-mapper
+RUN echo "minimap=/usr/bin/minimap2" >> ~/.kir-mapper
 RUN echo "samtools=/usr/local/bin/samtools" >> ~/.kir-mapper
 RUN echo "bcftools=/usr/local/bin/bcftools" >> ~/.kir-mapper
 RUN echo "freebayes=/usr/bin/freebayes" >> ~/.kir-mapper
@@ -124,12 +135,12 @@ RUN echo "shapeit4=/usr/bin/shapeit4" >> ~/.kir-mapper
 RUN echo "star=/usr/bin/STAR" >> ~/.kir-mapper
 RUN echo "picard=/home/picard.jar" >> ~/.kir-mapper
 RUN echo "whatshap=/usr/bin/whatshap" >> ~/.kir-mapper
-RUN echo "db=/home/kir-mapper/kir-mapper_db_Dec_2024/" >> ~/.kir-mapper
+RUN echo "db=/home/kir-mapper/kir-mapper_db_latest" >> ~/.kir-mapper
 
 WORKDIR /home/kir-mapper
-RUN wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_Dec_2024.zip
-RUN unzip kir-mapper_db_Dec_2024.zip
-RUN rm kir-mapper_db_Dec_2024.zip
+RUN wget --no-check-certificate https://www.castelli-lab.net/support/kir-mapper_db_latest.zip
+RUN unzip kir-mapper_db_latest.zip
+RUN rm kir-mapper_db_latest.zip
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y locales
 
@@ -138,6 +149,7 @@ RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     update-locale LANG=en_US.UTF-8
 
 ENV LANG en_US.UTF-8
+
 
 RUN apt-get install -y tabix
 
