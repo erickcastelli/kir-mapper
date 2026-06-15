@@ -1,6 +1,7 @@
 //from https://github.com/progschj/ThreadPool
 // used in kir-mapper, download from the link above
 
+
 #ifndef THREAD_POOL_H
 #define THREAD_POOL_H
 
