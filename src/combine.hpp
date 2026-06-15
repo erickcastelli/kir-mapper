@@ -2,7 +2,6 @@
 //  combine.hpp
 //  kir-mapper
 //
-//  Created by Erick Castelli on 31/05/23.
 //
 
 #ifndef combine_hpp
