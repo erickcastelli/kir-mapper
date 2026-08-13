@@ -3,7 +3,7 @@ kir-mapper
 
 Version 1.1 (May, 2026), using IPD-KIR version: 2.15
 
-Author: Erick C. Castelli (erick.castelli@unesp.br)
+Author: Erick C. Castelli, from Unesp/Brazil (erick.castelli@unesp.br)
 
 ***To use this version of kir-mapper, please download the database again. The old database is not compatible with this version, and the alleles were updated to IPD-KIR version 2.15. Do not forget to run `kir-mapper setup` again, or update the database path in the configuration file.***
 
